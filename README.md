@@ -46,7 +46,3 @@ More nodes = more decentralization = stronger network. That's it.
 
 - Mac version coming eventually
 - Windows version coming eventually
-
-## License
-
-MIT - do whatever you want with it.
