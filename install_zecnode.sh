@@ -270,15 +270,14 @@ def main():
     
     config = Config()
     
-    # Check if already installed OR if node is already running
+    # Check if already installed
     if config.is_installed():
         window = DashboardWindow(config)
     else:
-        # Check if zebra container exists (already set up but config was cleared)
+        # Check if zebra container already exists (user set up node manually)
         import subprocess
         import shutil
         
-        # Only check if docker is installed
         if shutil.which("docker"):
             try:
                 result = subprocess.run(
@@ -286,8 +285,15 @@ def main():
                     capture_output=True, text=True, timeout=10
                 )
                 if "zebra" in result.stdout:
-                    # Node exists, mark as installed and go to dashboard
-                    config.set_data_path("/mnt/zebra-data")
+                    # Node exists! Find where it's mounted
+                    mount_result = subprocess.run(
+                        ["docker", "inspect", "-f", "{{range .Mounts}}{{.Source}}{{end}}", "zebra"],
+                        capture_output=True, text=True, timeout=10
+                    )
+                    data_path = mount_result.stdout.strip() or "/mnt/zcash"
+                    
+                    # Create config and go straight to dashboard
+                    config.set_data_path(data_path)
                     config.mark_installed()
                     window = DashboardWindow(config)
                 else:
@@ -1832,7 +1838,9 @@ class InstallerWizard(QMainWindow):
         self._centered = False  # Track if we've centered yet
         
         self.setWindowTitle("ZecNode")
-        self.setFixedSize(540, 520)
+        self.setMinimumSize(700, 680)  # Larger base size for 4K
+        self.resize(700, 680)
+        
         self._setup_ui()
         self._check_resume()
     
@@ -2744,7 +2752,9 @@ class DashboardWindow(QMainWindow):
         self._centered = False
         
         self.setWindowTitle("ZecNode")
-        self.setFixedSize(460, 420)  # Taller for sync bar
+        self.setMinimumSize(600, 550)  # Larger base size for 4K
+        self.resize(600, 550)
+        
         self._setup_ui()
         self._setup_tray()
         
