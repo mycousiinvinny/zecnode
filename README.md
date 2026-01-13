@@ -13,12 +13,6 @@ A GUI installer and dashboard for running a Zcash full node. I built it because 
 
 Running a node on your main computer kind of sucks. It eats up resources, needs to stay on 24/7, and uses way more electricity than necessary. A Pi 5 with an SSD runs the full Zcash blockchain for like $5/year in electricity, sits in a corner, and just works. Set it and forget it.
 
-## Install
-
-```bash
-curl -sSL https://raw.githubusercontent.com/YOURUSERNAME/zecnode/main/install_zecnode.sh | bash
-```
-
 ## Requirements
 
 - Raspberry Pi 5 (recommended) or any Linux PC
