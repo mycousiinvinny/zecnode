@@ -978,6 +978,9 @@ gsettings set org.gnome.desktop.session idle-delay 0 2>/dev/null || true
         
         Returns: (success, partition_path or error_message)
         """
+        # Refresh sudo credentials first (in case they timed out)
+        subprocess.run(["sudo", "-v"], timeout=5)
+        
         # Verify drive exists before starting
         if not self._verify_drive_present(device):
             return False, f"Drive {device} not found. Is the SSD connected?"
@@ -2485,6 +2488,17 @@ class InstallerWizard(QMainWindow):
     
     def _start_install(self):
         if not self.selected_drive:
+            return
+        
+        # Prompt for sudo password BEFORE starting background tasks
+        # This ensures sudo credentials are cached
+        import subprocess
+        result = subprocess.run(
+            ["sudo", "-v"],
+            capture_output=False  # Let it show password prompt in terminal
+        )
+        if result.returncode != 0:
+            QMessageBox.critical(self, "Error", "Sudo authentication required")
             return
         
         self._go_to_page(4)
