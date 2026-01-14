@@ -786,9 +786,11 @@ class NodeManager:
             if actual_user and actual_user != 'root':
                 home_dir = f"/home/{actual_user}"
                 autostart_dir = f"{home_dir}/.config/autostart"
+                applications_dir = f"{home_dir}/.local/share/applications"
                 
-                # Create autostart directory if needed
+                # Create directories if needed
                 subprocess.run(["sudo", "mkdir", "-p", autostart_dir], capture_output=True, timeout=10)
+                subprocess.run(["sudo", "mkdir", "-p", applications_dir], capture_output=True, timeout=10)
                 
                 # Create a desktop entry that disables sleep on login
                 desktop_entry = """[Desktop Entry]
@@ -807,6 +809,25 @@ X-GNOME-Autostart-enabled=true
                 )
                 subprocess.run(["sudo", "chown", f"{actual_user}:{actual_user}", desktop_file], capture_output=True, timeout=10)
                 subprocess.run(["sudo", "chown", "-R", f"{actual_user}:{actual_user}", autostart_dir], capture_output=True, timeout=10)
+                
+                # Create application menu entry for ZecNode
+                app_entry = f"""[Desktop Entry]
+Type=Application
+Name=ZecNode
+Comment=Zcash Node Dashboard
+Exec=bash -c "cd {home_dir}/zecnode && python3 main.py"
+Icon=utilities-terminal
+Terminal=false
+Categories=Utility;Network;
+"""
+                app_file = f"{applications_dir}/zecnode.desktop"
+                subprocess.run(
+                    ["sudo", "bash", "-c", f"cat > {app_file} << 'EOF'\n{app_entry}EOF"],
+                    capture_output=True,
+                    timeout=10
+                )
+                subprocess.run(["sudo", "chown", f"{actual_user}:{actual_user}", app_file], capture_output=True, timeout=10)
+                subprocess.run(["sudo", "chmod", "+x", app_file], capture_output=True, timeout=10)
                 
                 # Also try running gsettings now via su (may work if display is available)
                 gsettings_script = """
