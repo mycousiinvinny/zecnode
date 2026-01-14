@@ -3,7 +3,6 @@
 Run a Zcash node without touching the command line.
 
 ![Platform](https://img.shields.io/badge/Platform-Raspberry%20Pi%20%7C%20Linux-green)
-![License](https://img.shields.io/badge/License-MIT-blue)
 
 ## What is this?
 
