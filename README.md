@@ -4,11 +4,15 @@ Run a Zcash node without touching the command line.
 
 ![Platform](https://img.shields.io/badge/Platform-Raspberry%20Pi%20%7C%20Linux-green)
 
+## Install
+
+sudo apt install curl -y && curl -sSL https://raw.githubusercontent.com/mycousiinvinny/zecnode/main/install_zecnode.sh | bash
+
+curl has to be installed beforehand. ZecNode also installs curl. Will remove in later version. Please report any bugs you find. Enjoy!
+
 ## What is this?
 
 A GUI installer and dashboard for running a Zcash full node. I built it because setting up a node manually is tedious - you have to install Docker, format drives, edit config files, etc. This handles all of that.
-
-Please report any bugs you find.
 
 ## Why a Raspberry Pi?
 
