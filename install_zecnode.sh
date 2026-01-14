@@ -4,6 +4,9 @@ echo "================================"
 echo "       ZecNode Installer"
 echo "================================"
 
+# Ensure sudo credentials are cached for the entire install
+sudo -v
+
 PROJECT_DIR="$HOME/zecnode"
 mkdir -p "$PROJECT_DIR"
 cd "$PROJECT_DIR"
@@ -2488,17 +2491,6 @@ class InstallerWizard(QMainWindow):
     
     def _start_install(self):
         if not self.selected_drive:
-            return
-        
-        # Prompt for sudo password BEFORE starting background tasks
-        # This ensures sudo credentials are cached
-        import subprocess
-        result = subprocess.run(
-            ["sudo", "-v"],
-            capture_output=False  # Let it show password prompt in terminal
-        )
-        if result.returncode != 0:
-            QMessageBox.critical(self, "Error", "Sudo authentication required")
             return
         
         self._go_to_page(4)
