@@ -1002,14 +1002,25 @@ gsettings set org.gnome.desktop.session idle-delay 0 2>/dev/null || true
             progress_callback(f"Unmounting {device}...")
         
         try:
-            # Unmount any partitions (use lazy unmount, don't wait)
-            subprocess.run(
-                ["bash", "-c", f"sudo umount -l {device}* 2>/dev/null || true"],
+            # Get list of partitions for this device from lsblk
+            result = subprocess.run(
+                ["lsblk", "-ln", "-o", "NAME", device],
                 capture_output=True,
+                text=True,
                 timeout=5
             )
             
-            # Brief pause
+            # Unmount each partition individually (skip the device itself)
+            device_name = device.replace("/dev/", "")
+            for line in result.stdout.strip().split('\n'):
+                part_name = line.strip()
+                if part_name and part_name != device_name:
+                    subprocess.run(
+                        ["sudo", "umount", "-l", f"/dev/{part_name}"],
+                        capture_output=True,
+                        timeout=5
+                    )
+            
             time.sleep(1)
             
             # Verify drive still present after unmount
@@ -2514,7 +2525,7 @@ class InstallerWizard(QMainWindow):
     def _reboot(self):
         import subprocess
         self.close()
-        subprocess.run(["sudo", "reboot"])
+        subprocess.run(["sudo", "systemctl", "reboot", "-i"])
     
     def _pulse_lightning(self):
         """Animate the lightning bolt with a glow effect"""
