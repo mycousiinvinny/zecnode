@@ -1002,32 +1002,15 @@ gsettings set org.gnome.desktop.session idle-delay 0 2>/dev/null || true
             progress_callback(f"Unmounting {device}...")
         
         try:
-            # CRITICAL: Unmount ALL partitions on this drive first
-            # Ubuntu auto-mounts drives, so we need to force release them
-            
-            # First, kill any file managers or processes holding the drive
-            subprocess.run(
-                ["bash", "-c", f"sudo fuser -k {device}* 2>/dev/null || true"],
-                capture_output=True,
-                timeout=10
-            )
-            
-            # Lazy unmount (detaches even if busy)
+            # Unmount any partitions (use lazy unmount, don't wait)
             subprocess.run(
                 ["bash", "-c", f"sudo umount -l {device}* 2>/dev/null || true"],
                 capture_output=True,
-                timeout=15
+                timeout=5
             )
             
-            # Regular unmount as backup
-            subprocess.run(
-                ["bash", "-c", f"sudo umount {device}* 2>/dev/null || true"],
-                capture_output=True,
-                timeout=15
-            )
-            
-            # Give system time to release the device
-            time.sleep(2)
+            # Brief pause
+            time.sleep(1)
             
             # Verify drive still present after unmount
             if not self._verify_drive_present(device):
