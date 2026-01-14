@@ -1003,11 +1003,27 @@ gsettings set org.gnome.desktop.session idle-delay 0 2>/dev/null || true
         
         try:
             # CRITICAL: Unmount ALL partitions on this drive first
-            # From thread: sudo umount /dev/sda2 (must unmount before format)
-            result = subprocess.run(
+            # Ubuntu auto-mounts drives, so we need to force release them
+            
+            # First, kill any file managers or processes holding the drive
+            subprocess.run(
+                ["bash", "-c", f"sudo fuser -k {device}* 2>/dev/null || true"],
+                capture_output=True,
+                timeout=10
+            )
+            
+            # Lazy unmount (detaches even if busy)
+            subprocess.run(
+                ["bash", "-c", f"sudo umount -l {device}* 2>/dev/null || true"],
+                capture_output=True,
+                timeout=15
+            )
+            
+            # Regular unmount as backup
+            subprocess.run(
                 ["bash", "-c", f"sudo umount {device}* 2>/dev/null || true"],
                 capture_output=True,
-                timeout=30
+                timeout=15
             )
             
             # Give system time to release the device
