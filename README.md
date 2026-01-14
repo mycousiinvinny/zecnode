@@ -6,9 +6,10 @@ Run a Zcash node without touching the command line.
 
 ## Install
 
-sudo apt install curl -y && curl -sSL https://raw.githubusercontent.com/mycousiinvinny/zecnode/main/install_zecnode.sh | bash
+*sudo apt install curl -y && curl -sSL https://raw.githubusercontent.com/mycousiinvinny/zecnode/main/install_zecnode.sh | bash*
 
-curl has to be installed beforehand. ZecNode also installs curl. Will remove in later version. Please report any bugs you find. Enjoy!
+
+Curl has to be installed beforehand. ZecNode also installs curl. Will remove in later version. Please report any bugs you find. Enjoy!
 
 ## What is this?
 
