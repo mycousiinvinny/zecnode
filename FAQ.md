@@ -12,7 +12,7 @@ Docker requires your user to be added to the "docker" group. This group membersh
 
 ## How long does the initial sync take?
 
-Depends on your internet speed and hardware. On a Raspberry Pi 5 with decent internet, expect 24-48 hours for a full sync.
+Depends on your internet speed and hardware. On a Raspberry Pi 5 with decent internet, expect 48-120 hours for a full sync.
 
 ## Can I use an HDD instead of an SSD?
 
