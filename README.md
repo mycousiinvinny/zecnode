@@ -16,7 +16,7 @@ Curl has to be installed beforehand. Please report any bugs you find. Enjoy!
 
 ## What is this?
 
-A GUI installer and dashboard for running a Zcash full node. I built it because setting up a node manually is tedious - you have to install Docker, format drives, edit config files, etc. This handles all of that.
+A GUI installer and dashboard for running a Zcash full node. I built it because setting up a node manually is tedious - you have to install Docker, format drives, edit config files, etc. Even more tedious if you don't use Docker. This handles all of that.
 
 ## Why a Raspberry Pi?
 
