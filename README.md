@@ -1,6 +1,6 @@
 # ZecNode
 
-Run a Zcash node without touching the command line.
+Run a Zcash node in only 2 commands!
 
 ![Platform](https://img.shields.io/badge/Platform-Raspberry%20Pi%20%7C%20Linux-green)
 
@@ -14,7 +14,11 @@ Command after reboot
 
 *curl -sSL https://raw.githubusercontent.com/mycousiinvinny/zecnode/main/install_zecnode.sh | bash*
 
-Curl has to be installed beforehand. Please report any bugs you find. Enjoy!
+Curl has to be installed beforehand. 
+
+Please report any bugs you find to me https://x.com/mycousiinvinny_
+
+Enjoy!
 
 ## What is this?
 
