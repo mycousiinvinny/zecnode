@@ -13,3 +13,4 @@ Initial release.
 - Resizable window for different screen sizes
 - Works on Raspberry Pi and Linux
 - Added sleep mode disabled. Pi must be on 24/7 for node to run
+- Added ZecNode to application menu for easy launch
