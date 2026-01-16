@@ -454,16 +454,6 @@ cat > node_manager.py << 'ENDOFFILE'
 """
 ZecNode Node Manager
 Handles all Docker and Zebra node operations
-Based on the Zcash Node Twitter thread guide
-
-CRITICAL STEPS FROM THREAD:
-- Step 2: apt update && apt upgrade -y && reboot
-- Step 3: Install Docker (curl, get-docker.sh, usermod, reboot)
-- Step 4: Format SSD (lsblk, umount, mkfs.ext4)
-- Step 5: Mount SSD (blkid, fstab, mount -a, chown)
-- Step 6: Configure Docker for SSD (CRITICAL - symlinks to SSD)
-- Step 7: docker pull zfnd/zebra:latest
-- Step 8: mkdir zebra-{cache,state} and docker run with volumes
 """
 
 import subprocess
@@ -508,7 +498,7 @@ class NodeManager:
     IMAGE_NAME = "zfnd/zebra:latest"
     MOUNT_PATH = "/mnt/zebra-data"
     
-    # Directory structure on SSD (matches Twitter thread exactly)
+    # Directory structure on SSD
     # Step 6: sudo mkdir -p /mnt/zebra-data/{docker,containerd}
     DOCKER_DIR = "docker"
     CONTAINERD_DIR = "containerd"
@@ -559,7 +549,7 @@ class NodeManager:
     def get_docker_root_dir(self) -> Optional[str]:
         """
         Get Docker's root directory.
-        From thread: docker info | grep "Docker Root Dir"
+        docker info | grep "Docker Root Dir"
         Must show: /mnt/zebra-data/docker
         """
         try:
@@ -578,7 +568,7 @@ class NodeManager:
     def verify_docker_on_ssd(self) -> bool:
         """
         CRITICAL: Verify Docker is using the SSD, not the SD card.
-        From thread: docker info | grep "Docker Root Dir"
+        docker info | grep "Docker Root Dir"
         Must show: /mnt/zebra-data/docker
         If not, redo Step 6!
         """
@@ -593,13 +583,13 @@ class NodeManager:
     def detect_external_drives(self) -> List[DriveInfo]:
         """
         Detect external/removable drives suitable for Zcash data.
-        From thread: lsblk (find SSD, usually sda)
+        lsblk (find SSD, usually sda)
         SAFETY: Excludes system drives and internal drives.
         """
         drives = []
         
         try:
-            # Use lsblk to get drive info (like thread Step 4)
+            # Use lsblk to get drive info
             result = subprocess.run(
                 ["lsblk", "-J", "-b", "-o", "NAME,SIZE,MODEL,RM,TYPE,MOUNTPOINT"],
                 capture_output=True,
@@ -709,7 +699,7 @@ class NodeManager:
     
     def update_system(self, progress_callback=None) -> Tuple[bool, str]:
         """
-        Step 2 from thread:
+        Step:
             sudo apt update
             sudo apt upgrade -y
         Note: Reboot happens separately after this + Docker install
@@ -894,7 +884,7 @@ gsettings set org.gnome.desktop.session idle-delay 0 2>/dev/null || true
     
     def install_docker(self, progress_callback=None) -> Tuple[bool, str]:
         """
-        Step 3 from thread:
+        Step:
             sudo apt install curl -y
             curl -fsSL https://get.docker.com -o get-docker.sh
             sudo sh get-docker.sh
@@ -971,7 +961,7 @@ gsettings set org.gnome.desktop.session idle-delay 0 2>/dev/null || true
     
     def format_drive(self, device: str, progress_callback=None) -> Tuple[bool, str]:
         """
-        Step 4 from thread:
+        Step:
             lsblk (find SSD, usually sda2)
             sudo umount /dev/sda2
             sudo mkfs.ext4 /dev/sda2
@@ -1092,7 +1082,7 @@ gsettings set org.gnome.desktop.session idle-delay 0 2>/dev/null || true
             if progress_callback:
                 progress_callback(f"Formatting {partition} as ext4...")
             
-            # Format as ext4 (from thread: sudo mkfs.ext4 /dev/sda2)
+            # Format as ext4)
             result = subprocess.run(
                 ["sudo", "mkfs.ext4", "-F", partition],
                 capture_output=True,
@@ -1109,7 +1099,7 @@ gsettings set org.gnome.desktop.session idle-delay 0 2>/dev/null || true
             if not self._verify_drive_present(device):
                 return False, "Drive disconnected after formatting. Please reconnect and try again."
             
-            # Create mount point (from thread: sudo mkdir -p /mnt/zebra-data)
+            # Create mount point)
             subprocess.run(
                 ["sudo", "mkdir", "-p", self.MOUNT_PATH],
                 capture_output=True
@@ -1126,7 +1116,7 @@ gsettings set org.gnome.desktop.session idle-delay 0 2>/dev/null || true
     
     def mount_drive(self, partition: str, progress_callback=None) -> Tuple[bool, str]:
         """
-        Step 5 from thread:
+        Step:
             sudo blkid /dev/sda2 (get UUID)
             sudo nano /etc/fstab
             Add: UUID=YOUR-UUID /mnt/zebra-data ext4 defaults 0 2
@@ -1167,7 +1157,7 @@ gsettings set org.gnome.desktop.session idle-delay 0 2>/dev/null || true
             if progress_callback:
                 progress_callback("Getting partition UUID...")
             
-            # Get UUID (from thread: sudo blkid /dev/sda2)
+            # Get UUID)
             result = subprocess.run(
                 ["sudo", "blkid", "-s", "UUID", "-o", "value", partition],
                 capture_output=True,
@@ -1198,7 +1188,7 @@ gsettings set org.gnome.desktop.session idle-delay 0 2>/dev/null || true
             if progress_callback:
                 progress_callback("Mounting drive...")
             
-            # Reload and mount (from thread)
+            # Reload and mount)
             subprocess.run(["sudo", "systemctl", "daemon-reload"], capture_output=True)
             
             result = subprocess.run(
@@ -1213,7 +1203,7 @@ gsettings set org.gnome.desktop.session idle-delay 0 2>/dev/null || true
             if progress_callback:
                 progress_callback("Setting permissions...")
             
-            # Set ownership (from thread: sudo chown -R $USER:$USER /mnt/zebra-data)
+            # Set ownership)
             user = os.environ.get("USER", "root")
             subprocess.run(
                 ["sudo", "chown", "-R", f"{user}:{user}", self.MOUNT_PATH],
@@ -1233,7 +1223,7 @@ gsettings set org.gnome.desktop.session idle-delay 0 2>/dev/null || true
     
     def configure_docker_for_ssd(self, progress_callback=None) -> Tuple[bool, str]:
         """
-        CRITICAL Step 6 from thread - Docker must store data on SSD!
+        CRITICAL: - Docker must store data on SSD!
         
             sudo systemctl stop docker containerd
             sudo rm -rf /var/lib/docker /var/lib/containerd
@@ -1268,7 +1258,7 @@ gsettings set org.gnome.desktop.session idle-delay 0 2>/dev/null || true
                 progress_callback("Removing old Docker data from SD card...")
             
             # Remove existing Docker directories from SD card
-            # From thread: sudo rm -rf /var/lib/docker /var/lib/containerd
+            # sudo rm -rf /var/lib/docker /var/lib/containerd
             subprocess.run(
                 ["sudo", "rm", "-rf", "/var/lib/docker"],
                 capture_output=True
@@ -1282,7 +1272,7 @@ gsettings set org.gnome.desktop.session idle-delay 0 2>/dev/null || true
                 progress_callback("Creating Docker directories on SSD...")
             
             # Create directories on SSD
-            # From thread: sudo mkdir -p /mnt/zebra-data/{docker,containerd}
+            # sudo mkdir -p /mnt/zebra-data/{docker,containerd}
             docker_path = f"{self.MOUNT_PATH}/{self.DOCKER_DIR}"
             containerd_path = f"{self.MOUNT_PATH}/{self.CONTAINERD_DIR}"
             
@@ -1299,7 +1289,7 @@ gsettings set org.gnome.desktop.session idle-delay 0 2>/dev/null || true
                 progress_callback("Creating symlinks...")
             
             # Create symlinks from /var/lib to SSD
-            # From thread: sudo ln -sf /mnt/zebra-data/docker /var/lib/docker
+            # sudo ln -sf /mnt/zebra-data/docker /var/lib/docker
             result = subprocess.run(
                 ["sudo", "ln", "-sf", docker_path, "/var/lib/docker"],
                 capture_output=True,
@@ -1351,7 +1341,7 @@ gsettings set org.gnome.desktop.session idle-delay 0 2>/dev/null || true
     
     def pull_zebra_image(self, progress_callback=None) -> Tuple[bool, str]:
         """
-        Step 7 from thread:
+        Step:
             docker pull zfnd/zebra:latest
         """
         if progress_callback:
@@ -1377,7 +1367,7 @@ gsettings set org.gnome.desktop.session idle-delay 0 2>/dev/null || true
     
     def create_zebra_directories(self, progress_callback=None) -> Tuple[bool, str]:
         """
-        Part of Step 7 from thread:
+        Part of Step:
             mkdir -p /mnt/zebra-data/zebra-{cache,state}
         """
         if progress_callback:
@@ -1446,7 +1436,7 @@ gsettings set org.gnome.desktop.session idle-delay 0 2>/dev/null || true
                 capture_output=True
             )
             
-            # Start container with EXACT mounts from thread
+            # Start container with volume mounts
             result = subprocess.run([
                 "docker", "run", "-d",
                 "--name", self.CONTAINER_NAME,
@@ -1580,7 +1570,7 @@ gsettings set org.gnome.desktop.session idle-delay 0 2>/dev/null || true
     def get_disk_usage(self) -> Tuple[str, str]:
         """
         Get disk usage for SSD and SD card.
-        From thread:
+        Commands:
             df -h /mnt/zebra-data (SSD - should grow)
             df -h / (SD - should stay ~8GB)
         """
@@ -2045,7 +2035,7 @@ class InstallerWizard(QMainWindow):
         
         # Steps
         self.setup_steps = []
-        steps = ["Update system", "Install Curl & Docker"]
+        steps = ["Update system", "Install Docker"]
         
         for step in steps:
             row = QHBoxLayout()
