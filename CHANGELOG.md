@@ -6,6 +6,8 @@
 
 - Fixed: Closing dashboard no longer leaves orphaned tray icons
 
+- Added disable sleep mode in installer
+
 
 ## v1.0.0 - January 2025
 
