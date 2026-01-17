@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.0.1 - January 2025
+
+-Fixed: App now opens properly from application menu after closing
+-Fixed: Closing dashboard no longer leaves orphaned tray icons
+
+
 ## v1.0.0 - January 2025
 
 Initial release.
