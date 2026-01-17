@@ -326,7 +326,7 @@ import json
 from pathlib import Path
 from typing import Optional
 
-VERSION = "1.0.0"
+VERSION = "1.0.1"
 
 
 class Config:
@@ -3215,14 +3215,8 @@ class DashboardWindow(QMainWindow):
             QApplication.quit()
     
     def closeEvent(self, event):
-        event.ignore()
-        self.hide()
-        self.tray.showMessage(
-            "ZecNode",
-            "Running in background",
-            QSystemTrayIcon.Information,
-            1500
-        )
+        self.tray.hide()
+        event.accept()
 
 ENDOFFILE
 
