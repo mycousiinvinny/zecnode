@@ -16,7 +16,7 @@ Command after reboot
 
 Curl has to be installed beforehand. 
 
-Please report any bugs you find to me https://x.com/mycousiinvinny__
+Please report any bugs you find.
 
 Enjoy!
 
