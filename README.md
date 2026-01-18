@@ -10,7 +10,7 @@ Open Terminal and run:
 
 *sudo apt install curl -y && curl -sSL https://raw.githubusercontent.com/mycousiinvinny/zecnode/main/install_zecnode.sh | bash*
 
-Command after reboot
+Command after reboot:
 
 *curl -sSL https://raw.githubusercontent.com/mycousiinvinny/zecnode/main/install_zecnode.sh | bash* 
 
