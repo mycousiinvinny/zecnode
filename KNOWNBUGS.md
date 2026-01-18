@@ -10,7 +10,7 @@
 - RSS memory usage climbs continuously without dropping
 
 **When it occurs:**
-- Most noticeable while node is actively syncing
+- Most noticeable while node is actively syncing past 50%
 - The dashboard refresh loop runs continuously, updating sync progress, block height, peers, etc.
 
 **Possible causes:**
