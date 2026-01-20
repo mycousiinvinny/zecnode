@@ -326,7 +326,7 @@ import json
 from pathlib import Path
 from typing import Optional
 
-VERSION = "1.0.1"
+VERSION = "1.0.2"
 
 
 class Config:
@@ -2789,6 +2789,7 @@ class DashboardWindow(QMainWindow):
         self.timer.timeout.connect(self._refresh)
         self.timer.start(1000)  # 1 second for real-time updates
         self._action_in_progress = False
+        self._closing = False
         self._refresh()
     
     def showEvent(self, event):
@@ -3089,6 +3090,10 @@ class DashboardWindow(QMainWindow):
             self._show_dashboard()
     
     def _refresh(self):
+        # Exit immediately if closing
+        if self._closing:
+            return
+        
         # Don't refresh while an action is in progress
         if self._action_in_progress:
             return
@@ -3215,6 +3220,14 @@ class DashboardWindow(QMainWindow):
             QApplication.quit()
     
     def closeEvent(self, event):
+        # Stop refresh timer IMMEDIATELY to prevent blocking
+        self._closing = True
+        self.timer.stop()
+        try:
+            self.timer.timeout.disconnect()
+        except:
+            pass
+        self._action_in_progress = True
         self.tray.hide()
         event.accept()
 
