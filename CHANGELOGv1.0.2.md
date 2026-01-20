@@ -1,10 +1,10 @@
 # Changelog v1.0.2
 
-## v1.0.2 - January 20th 2025
+## v1.0.2 - January 20th 2026
 
 - Fixed: Significant dashboard freeze when closing after 55% sync. This occured if you didnt close dashboard after initial install.
 
-## v1.0.1 - January 2025
+## v1.0.1 - January 2026
 
 - Fixed: App now opens properly from application menu after closing
 
@@ -13,7 +13,7 @@
 - Added disable sleep mode in installer
 
 
-## v1.0.0 - January 2025
+## v1.0.0 - January 2026
 
 Initial release.
 
