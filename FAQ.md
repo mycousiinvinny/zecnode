@@ -33,3 +33,7 @@ Open the dashboard - when sync progress shows 100% and displays "✓ Synced", yo
 ## How do I update ZecNode?
 
 Run the install command again. It will update the app files without touching your blockchain data.
+
+## Will my node still run if I close the dashboard?
+
+Yes! Your node will run in the background.
