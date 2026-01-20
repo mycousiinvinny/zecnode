@@ -1,4 +1,8 @@
-# Changelog v1.0.1
+# Changelog v1.0.2
+
+## v1.0.2 - January 20th 2025
+
+- Fixed: Significant dashboard freeze when closing after 55% sync. This occured if you didnt close dashboard after initial install.
 
 ## v1.0.1 - January 2025
 
