@@ -1,10 +1,10 @@
 # FAQ
 
-## Why does it ask for my password twice?
+## Why does it ask for my system password twice?
 
-**Before reboot:** The installer needs your password to update system packages and install Docker. A reboot is required for Docker permissions to take effect.
+**Before reboot:** The installer needs your system password to update system packages and install Docker. A reboot is required for Docker permissions to take effect.
 
-**After reboot:** Your password is needed again to format the SSD, configure system mounts, and start the Zcash node.
+**After reboot:** Your system password is needed again to format the SSD, configure system mounts, and start the Zcash node.
 
 ## Why is a reboot required?
 
