@@ -4,6 +4,8 @@
 
 - Fixed: Significant dashboard freeze when closing dashboard after 55% sync. This occured if you didnt close dashboard after initial install.
 
+- Added zcash logo to application icon
+
 ## v1.0.1 - January 2026
 
 - Fixed: App now opens properly from application menu after closing
