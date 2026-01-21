@@ -272,6 +272,7 @@ def main():
     app = QApplication(sys.argv)
     app.setApplicationName("ZecNode")
     app.setOrganizationName("ZecNode")
+    app.setDesktopFileName("zecnode")
     app.setStyle("Fusion")
     app.setStyleSheet(STYLESHEET)
     
@@ -3272,23 +3273,10 @@ class DashboardWindow(QMainWindow):
             QApplication.quit()
     
     def closeEvent(self, event):
-        # Stop refresh timer IMMEDIATELY to prevent blocking
-        self._closing = True
-        self.timer.stop()
-        try:
-            self.timer.timeout.disconnect()
-        except:
-            pass
-        self._action_in_progress = True
-        
-        # Kill any running refresh thread
-        if hasattr(self, 'refresh_thread') and self.refresh_thread is not None:
-            if self.refresh_thread.isRunning():
-                self.refresh_thread.terminate()
-                self.refresh_thread.wait(100)  # Wait max 100ms
-        
-        self.tray.hide()
-        event.accept()
+        # Force exit immediately - don't wait for anything
+        # The node runs in Docker and is unaffected
+        import os
+        os._exit(0)
 
 ENDOFFILE
 
