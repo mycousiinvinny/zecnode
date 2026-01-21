@@ -11,6 +11,10 @@ PROJECT_DIR="$HOME/zecnode"
 mkdir -p "$PROJECT_DIR"
 cd "$PROJECT_DIR"
 
+# Download ZecNode icon
+echo "Downloading icon..."
+curl -sSL -o "$PROJECT_DIR/zecnode-icon.png" "https://raw.githubusercontent.com/mycousiinvinny/zecnode/main/zecnode-icon.png" 2>/dev/null || true
+
 echo "Installing dependencies..."
 
 # Install PyQt5 - try multiple methods
@@ -809,7 +813,7 @@ Type=Application
 Name=ZecNode
 Comment=Zcash Node Dashboard
 Exec=bash -c "cd {home_dir}/zecnode && python3 main.py"
-Icon=utilities-terminal
+Icon={home_dir}/zecnode/zecnode-icon.png
 Terminal=false
 Categories=Utility;Network;
 """
@@ -2611,6 +2615,43 @@ class NodeActionThread(QThread):
         self.finished.emit(ok, msg)
 
 
+class RefreshThread(QThread):
+    """Background thread for fetching node status without blocking UI"""
+    finished = pyqtSignal(object, bool, str, str)  # status, has_internet, ssd, sd
+    
+    def __init__(self, node_manager):
+        super().__init__()
+        self.node_manager = node_manager
+        self._running = True
+    
+    def stop(self):
+        self._running = False
+    
+    def run(self):
+        if not self._running:
+            return
+        
+        # Check internet
+        has_internet = check_internet()
+        
+        if not self._running:
+            return
+        
+        # Get node status (this is the slow call)
+        status = self.node_manager.get_status()
+        
+        if not self._running:
+            return
+        
+        # Get disk usage
+        ssd, sd = self.node_manager.get_disk_usage()
+        
+        if not self._running:
+            return
+        
+        self.finished.emit(status, has_internet, ssd, sd)
+
+
 class LogsDialog(QDialog):
     """Live logs viewer"""
     
@@ -2786,11 +2827,12 @@ class DashboardWindow(QMainWindow):
         self._setup_tray()
         
         self.timer = QTimer()
-        self.timer.timeout.connect(self._refresh)
+        self.timer.timeout.connect(self._start_refresh)
         self.timer.start(1000)  # 1 second for real-time updates
         self._action_in_progress = False
         self._closing = False
-        self._refresh()
+        self.refresh_thread = None
+        self._start_refresh()
     
     def showEvent(self, event):
         """Center window when it's shown"""
@@ -3089,7 +3131,8 @@ class DashboardWindow(QMainWindow):
         if reason == QSystemTrayIcon.DoubleClick:
             self._show_dashboard()
     
-    def _refresh(self):
+    def _start_refresh(self):
+        """Start a background refresh - doesn't block UI"""
         # Exit immediately if closing
         if self._closing:
             return
@@ -3098,10 +3141,20 @@ class DashboardWindow(QMainWindow):
         if self._action_in_progress:
             return
         
-        # Check internet connection
-        has_internet = check_internet()
+        # Don't start new refresh if one is already running
+        if self.refresh_thread is not None and self.refresh_thread.isRunning():
+            return
         
-        status = self.node_manager.get_status()
+        # Start background refresh
+        self.refresh_thread = RefreshThread(self.node_manager)
+        self.refresh_thread.finished.connect(self._on_refresh_done)
+        self.refresh_thread.start()
+    
+    def _on_refresh_done(self, status, has_internet, ssd, sd):
+        """Handle refresh results from background thread"""
+        # Exit if closing
+        if self._closing:
+            return
         
         # Status - check internet first, then running state
         if status.running and not has_internet:
@@ -3132,7 +3185,6 @@ class DashboardWindow(QMainWindow):
         self.uptime_card.set_value(status.uptime)
         
         # Disk usage
-        ssd, sd = self.node_manager.get_disk_usage()
         self.ssd_card.set_value(ssd.split("/")[0].strip() if "/" in ssd else ssd)
         self.sd_card.set_value(sd.split("/")[0].strip() if "/" in sd else sd)
         
@@ -3228,6 +3280,13 @@ class DashboardWindow(QMainWindow):
         except:
             pass
         self._action_in_progress = True
+        
+        # Kill any running refresh thread
+        if hasattr(self, 'refresh_thread') and self.refresh_thread is not None:
+            if self.refresh_thread.isRunning():
+                self.refresh_thread.terminate()
+                self.refresh_thread.wait(100)  # Wait max 100ms
+        
         self.tray.hide()
         event.accept()
 
