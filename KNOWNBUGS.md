@@ -1,3 +1,3 @@
 # Known Bugs
 
-## No known bugs at this time
+Still getting a 20 second freeze after 50% sync on initial dashboard launch. Trying a fix.
