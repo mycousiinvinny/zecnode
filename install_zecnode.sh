@@ -3270,13 +3270,20 @@ class DashboardWindow(QMainWindow):
         )
         if reply == QMessageBox.Yes:
             self.tray.hide()
-            QApplication.quit()
+            QApplication.processEvents()
+            import os
+            os._exit(0)
     
     def closeEvent(self, event):
-        # Force exit immediately - don't wait for anything
-        # The node runs in Docker and is unaffected
-        import os
-        os._exit(0)
+        # Minimize to tray instead of closing
+        event.ignore()
+        self.hide()
+        self.tray.showMessage(
+            "ZecNode",
+            "Running in background. Click tray icon to open.",
+            QSystemTrayIcon.Information,
+            2000
+        )
 
 ENDOFFILE
 
