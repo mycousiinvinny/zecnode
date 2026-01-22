@@ -8,6 +8,10 @@
 
 - Added: Zcash logo as app icon
 
+- Changed: Closing dashboard now minimizes to system tray instead of quitting. (right-click tray icon → Quit to fully close)
+
+
+
 ## v1.0.1 - January 2026
 
 - Fixed: App now opens properly from application menu after closing
