@@ -6,6 +6,10 @@
 
 - Added zcash logo to application icon
 
+- Fixed: App icon now shows as "open" in taskbar/dock when dashboard is running
+
+- Added: Zcash logo as app icon
+
 ## v1.0.1 - January 2026
 
 - Fixed: App now opens properly from application menu after closing
