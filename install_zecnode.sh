@@ -290,7 +290,6 @@ def main():
         window = DashboardWindow(config)
     else:
         # Check if zebra container already exists (user set up node manually)
-        import subprocess
         import shutil
         
         if shutil.which("docker"):
