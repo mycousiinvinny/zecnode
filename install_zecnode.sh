@@ -3322,7 +3322,7 @@ class DashboardWindow(QMainWindow):
         
         if not ok:
             QMessageBox.warning(self, "Error", msg)
-        self._refresh()
+        self._start_refresh()
     
     def _show_logs(self):
         dialog = LogsDialog(self, self.node_manager)
