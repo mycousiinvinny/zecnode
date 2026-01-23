@@ -31,7 +31,7 @@ Running a node on your main computer kind of sucks. It eats up resources, needs 
 - Raspberry Pi 5 (recommended) or any Linux PC
 - External SSD (500GB minimum)
 - Internet connection
-- About 30 minutes for initial setup. Much less if your system is up to date.
+- About 20 minutes for initial setup. Much less if your system is up to date.
 
 ## What it does
 
