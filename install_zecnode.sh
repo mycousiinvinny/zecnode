@@ -56,60 +56,15 @@ Main entry point with professional styling
 """
 
 import sys
-import socket
 import os
+import subprocess
 from PyQt5.QtWidgets import QApplication
-from PyQt5.QtCore import Qt, QThread, pyqtSignal
+from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QFont
 
 from config import Config
 from installer import InstallerWizard
 from dashboard import DashboardWindow
-
-SOCKET_PATH = "/tmp/zecnode.sock"
-
-
-class SocketListener(QThread):
-    """Listen for signals from new instances"""
-    show_window = pyqtSignal()
-    
-    def __init__(self):
-        super().__init__()
-        self._running = True
-    
-    def run(self):
-        # Remove old socket if exists
-        try:
-            os.unlink(SOCKET_PATH)
-        except:
-            pass
-        
-        # Create socket
-        server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        server.bind(SOCKET_PATH)
-        server.listen(1)
-        server.settimeout(1.0)  # Check _running every second
-        
-        while self._running:
-            try:
-                conn, _ = server.accept()
-                data = conn.recv(1024).decode()
-                if data == "show":
-                    self.show_window.emit()
-                conn.close()
-            except socket.timeout:
-                continue
-            except:
-                break
-        
-        server.close()
-        try:
-            os.unlink(SOCKET_PATH)
-        except:
-            pass
-    
-    def stop(self):
-        self._running = False
 
 
 # Professional dark theme with Zcash branding
@@ -307,17 +262,16 @@ QMenu::item:selected {
 
 
 def main():
-    # Try to connect to existing instance first
-    try:
-        client = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        client.connect(SOCKET_PATH)
-        client.send(b"show")
-        client.close()
-        # Existing instance will show itself, we exit
-        sys.exit(0)
-    except:
-        # No existing instance, we become the main one
-        pass
+    # Kill any existing ZecNode instances (but not ourselves)
+    my_pid = os.getpid()
+    subprocess.run(
+        ["bash", "-c", f"pgrep -f 'python.*main.py' | grep -v {my_pid} | xargs -r kill -9 2>/dev/null || true"],
+        capture_output=True
+    )
+    
+    # Small delay to let old instances fully die
+    import time
+    time.sleep(0.3)
     
     QApplication.setAttribute(Qt.AA_EnableHighDpiScaling, True)
     QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps, True)
@@ -364,21 +318,8 @@ def main():
         else:
             window = InstallerWizard(config)
     
-    # Start socket listener for other instances
-    socket_listener = SocketListener()
-    socket_listener.show_window.connect(window.show)
-    socket_listener.show_window.connect(window.raise_)
-    socket_listener.show_window.connect(window.activateWindow)
-    socket_listener.start()
-    
     window.show()
-    result = app.exec_()
-    
-    # Cleanup
-    socket_listener.stop()
-    socket_listener.wait(1000)
-    
-    sys.exit(result)
+    sys.exit(app.exec_())
 
 
 if __name__ == "__main__":
@@ -3341,15 +3282,12 @@ class DashboardWindow(QMainWindow):
             os._exit(0)
     
     def closeEvent(self, event):
-        # Minimize to tray instead of closing
-        event.ignore()
-        self.hide()
-        self.tray.showMessage(
-            "ZecNode",
-            "Running in background. Click tray icon to open.",
-            QSystemTrayIcon.Information,
-            2000
-        )
+        # Hide tray and close
+        self.tray.hide()
+        QApplication.processEvents()
+        event.accept()
+        import os
+        os._exit(0)
 
 ENDOFFILE
 
