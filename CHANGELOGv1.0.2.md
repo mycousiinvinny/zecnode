@@ -4,7 +4,7 @@
 
 - Fixed: Significant dashboard freeze when closing dashboard after 55% sync. This occured if you didnt close dashboard after initial install.
 
-- Fixed: App icon now shows as "open" in taskbar/dock when dashboard is running
+- Fixed: App icon now shows as "open" in taskbar/dock when dashboard is running.
 
 - Added: Zcash logo as app icon
 
