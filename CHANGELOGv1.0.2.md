@@ -2,14 +2,11 @@
 
 ## v1.0.2 - January 20th 2026
 
-- Fixed: Significant dashboard freeze when closing dashboard after 55% sync. This occured if you didnt close dashboard after initial install.
+- Fixed: Significant dashboard freeze when closing dashboard after 55% sync or if dashboard has stayed open for long periods of time. This occured if you didnt close dashboard after initial install. ~10 second freeze still happens. 
 
 - Fixed: App icon now shows as "open" in taskbar/dock when dashboard is running.
 
 - Added: Zcash logo as app icon
-
-- Changed: Closing dashboard now minimizes to system tray instead of quitting. (right-click tray icon → Quit to fully close)
-
 
 
 ## v1.0.1 - January 2026
