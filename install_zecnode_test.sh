@@ -337,7 +337,7 @@ import json
 from pathlib import Path
 from typing import Optional
 
-VERSION = "1.0.2"
+VERSION = "1.0.3"
 
 
 class Config:
@@ -2575,6 +2575,7 @@ Professional status display and node controls
 
 import socket
 import json
+import os
 import urllib.request
 from PyQt5.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel,
@@ -2810,6 +2811,142 @@ class StatusDot(QWidget):
         painter.setBrush(color)
         painter.setPen(Qt.NoPen)
         painter.drawEllipse(1, 1, 10, 10)
+
+
+class UpdateDialog(QDialog):
+    """Loading dialog with pulsing Zcash logo"""
+    
+    def __init__(self, parent, message="Updating..."):
+        super().__init__(parent)
+        self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
+        self.setModal(True)
+        self.setFixedSize(250, 180)
+        self.setStyleSheet("background-color: #0f0f14; border: 1px solid #333; border-radius: 15px;")
+        
+        layout = QVBoxLayout(self)
+        layout.setAlignment(Qt.AlignCenter)
+        layout.setSpacing(20)
+        
+        # Zcash logo (will pulse)
+        self.logo_label = QLabel()
+        self.logo_label.setAlignment(Qt.AlignCenter)
+        self._opacity = 1.0
+        self._fading_out = True
+        
+        # Load the Zcash icon
+        icon_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "zecnode-icon.png")
+        if os.path.exists(icon_path):
+            pixmap = QPixmap(icon_path).scaled(64, 64, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            self.logo_label.setPixmap(pixmap)
+        else:
+            self.logo_label.setText("Ⓩ")
+            self.logo_label.setStyleSheet("font-size: 48px; color: #f4b728;")
+        
+        layout.addWidget(self.logo_label)
+        
+        # Message
+        self.message_label = QLabel(message)
+        self.message_label.setAlignment(Qt.AlignCenter)
+        self.message_label.setStyleSheet("color: #e8e8e8; font-size: 14px; border: none;")
+        layout.addWidget(self.message_label)
+        
+        # Pulse animation timer
+        self.pulse_timer = QTimer()
+        self.pulse_timer.timeout.connect(self._pulse)
+        self.pulse_timer.start(50)
+    
+    def _pulse(self):
+        if self._fading_out:
+            self._opacity -= 0.03
+            if self._opacity <= 0.3:
+                self._fading_out = False
+        else:
+            self._opacity += 0.03
+            if self._opacity >= 1.0:
+                self._fading_out = True
+        
+        self.logo_label.setStyleSheet(f"opacity: {self._opacity}; border: none;")
+        # Use setGraphicsEffect for actual opacity
+        from PyQt5.QtWidgets import QGraphicsOpacityEffect
+        effect = QGraphicsOpacityEffect()
+        effect.setOpacity(self._opacity)
+        self.logo_label.setGraphicsEffect(effect)
+    
+    def set_message(self, message):
+        self.message_label.setText(message)
+    
+    def closeEvent(self, event):
+        self.pulse_timer.stop()
+        super().closeEvent(event)
+
+
+class UpdateThread(QThread):
+    """Background thread for updates"""
+    finished = pyqtSignal(bool, str)  # success, message
+    
+    def __init__(self, update_type, data_path=None):
+        super().__init__()
+        self.update_type = update_type
+        self.data_path = data_path
+    
+    def run(self):
+        import subprocess
+        try:
+            if self.update_type == "zecnode":
+                # Download and run install script
+                result = subprocess.run(
+                    ["bash", "-c", "curl -sSL https://raw.githubusercontent.com/mycousiinvinny/zecnode/main/install_zecnode.sh -o /tmp/zecnode_update.sh && bash /tmp/zecnode_update.sh --update-only"],
+                    capture_output=True, text=True, timeout=120
+                )
+                if result.returncode == 0:
+                    self.finished.emit(True, "ZecNode updated! Restart to apply changes.")
+                else:
+                    self.finished.emit(False, f"Update failed: {result.stderr}")
+            
+            elif self.update_type == "zebra":
+                # Pull latest image
+                result = subprocess.run(
+                    ["docker", "pull", "zfnd/zebra:latest"],
+                    capture_output=True, text=True, timeout=300
+                )
+                if result.returncode != 0:
+                    self.finished.emit(False, "Failed to pull Zebra image")
+                    return
+                
+                # Check if container is running
+                running = subprocess.run(
+                    ["docker", "ps", "-q", "-f", "name=zebra"],
+                    capture_output=True, text=True
+                )
+                was_running = bool(running.stdout.strip())
+                
+                # Stop container if running
+                if was_running:
+                    subprocess.run(["docker", "stop", "zebra"], capture_output=True, timeout=30)
+                
+                # Remove old container
+                subprocess.run(["docker", "rm", "zebra"], capture_output=True, timeout=10)
+                
+                # Start new container with same data path
+                data_path = self.data_path or "/mnt/zcash"
+                result = subprocess.run([
+                    "docker", "run", "-d",
+                    "--name", "zebra",
+                    "--restart", "unless-stopped",
+                    "-v", f"{data_path}:/data",
+                    "-p", "8233:8233",
+                    "zfnd/zebra:latest"
+                ], capture_output=True, text=True, timeout=30)
+                
+                if result.returncode == 0:
+                    self.finished.emit(True, "Zebra updated successfully!")
+                else:
+                    self.finished.emit(False, f"Failed to start Zebra: {result.stderr}")
+        
+        except subprocess.TimeoutExpired:
+            self.finished.emit(False, "Update timed out")
+        except Exception as e:
+            self.finished.emit(False, f"Error: {str(e)}")
 
 
 class StatCard(QFrame):
@@ -3146,6 +3283,16 @@ class DashboardWindow(QMainWindow):
         
         menu.addSeparator()
         
+        update_zecnode = QAction("Update ZecNode", self)
+        update_zecnode.triggered.connect(self._update_zecnode)
+        menu.addAction(update_zecnode)
+        
+        update_zebra = QAction("Update Zebra", self)
+        update_zebra.triggered.connect(self._update_zebra)
+        menu.addAction(update_zebra)
+        
+        menu.addSeparator()
+        
         quit_action = QAction("Quit", self)
         quit_action.triggered.connect(self._quit)
         menu.addAction(quit_action)
@@ -3343,6 +3490,58 @@ class DashboardWindow(QMainWindow):
             self.price_label.setText("$--")
             self.change_label.setText("--%")
             self.change_label.setStyleSheet("color: #888; font-size: 11px;")
+    
+    def _update_zecnode(self):
+        """Update ZecNode from GitHub"""
+        reply = QMessageBox.question(
+            self, "Update ZecNode",
+            "Download and install the latest version of ZecNode?\n\nThe app will restart after updating.",
+            QMessageBox.Yes | QMessageBox.No
+        )
+        if reply != QMessageBox.Yes:
+            return
+        
+        self.update_dialog = UpdateDialog(self, "Updating ZecNode...")
+        self.update_dialog.show()
+        
+        self.update_thread = UpdateThread("zecnode")
+        self.update_thread.finished.connect(self._on_update_done)
+        self.update_thread.start()
+    
+    def _update_zebra(self):
+        """Update Zebra to latest version"""
+        reply = QMessageBox.question(
+            self, "Update Zebra",
+            "Download and install the latest Zebra version?\n\nThe node will restart during the update.\nYour blockchain data will be preserved.",
+            QMessageBox.Yes | QMessageBox.No
+        )
+        if reply != QMessageBox.Yes:
+            return
+        
+        self.update_dialog = UpdateDialog(self, "Updating Zebra...")
+        self.update_dialog.show()
+        
+        data_path = self.config.get_data_path() if hasattr(self.config, 'get_data_path') else "/mnt/zcash"
+        self.update_thread = UpdateThread("zebra", data_path)
+        self.update_thread.finished.connect(self._on_update_done)
+        self.update_thread.start()
+    
+    def _on_update_done(self, success, message):
+        """Handle update completion"""
+        if hasattr(self, 'update_dialog'):
+            self.update_dialog.close()
+        
+        if success:
+            QMessageBox.information(self, "Update Complete", message)
+            if "restart" in message.lower():
+                # Restart the app
+                import subprocess
+                subprocess.Popen(["python3", os.path.abspath(__file__)])
+                self._quit()
+        else:
+            QMessageBox.warning(self, "Update Failed", message)
+        
+        self._start_refresh()
     
     def _show_logs(self):
         dialog = LogsDialog(self, self.node_manager)
