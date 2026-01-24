@@ -1,4 +1,8 @@
-# Changelog v1.0.2
+# Changelog v1.0.3
+
+## v1.0.3 - January 24th 2026
+
+- Added: Live ZEC price display with 24h change (updates every 30 seconds)
 
 ## v1.0.2 - January 20th 2026
 
