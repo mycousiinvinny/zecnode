@@ -2,7 +2,13 @@
 
 Run a Zcash node in only 2 commands!
 
+This is commu
+
 ![Platform](https://img.shields.io/badge/Platform-Raspberry%20Pi%20%7C%20Linux-green)
+
+## Disclaimer
+
+ZecNode is an independent community project and is not affiliated with, endorsed by, or associated with the Electric Coin Company, Zcash Foundation, or any official Zcash organization.
 
 ## Install
 
