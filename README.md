@@ -2,8 +2,6 @@
 
 Run a Zcash node in only 2 commands!
 
-This is commu
-
 ![Platform](https://img.shields.io/badge/Platform-Raspberry%20Pi%20%7C%20Linux-green)
 
 ## Disclaimer
