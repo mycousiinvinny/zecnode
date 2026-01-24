@@ -337,7 +337,7 @@ import json
 from pathlib import Path
 from typing import Optional
 
-VERSION = "1.0.2"
+VERSION = "1.0.3"
 
 
 class Config:
@@ -2574,6 +2574,8 @@ Professional status display and node controls
 """
 
 import socket
+import json
+import urllib.request
 from PyQt5.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel,
     QPushButton, QTextEdit, QSystemTrayIcon,
@@ -2599,6 +2601,29 @@ def check_internet(timeout=2) -> bool:
         return True
     except OSError:
         return False
+
+
+def fetch_zec_price():
+    """Fetch ZEC price from CoinGecko API"""
+    try:
+        url = "https://api.coingecko.com/api/v3/simple/price?ids=zcash&vs_currencies=usd&include_24hr_change=true"
+        req = urllib.request.Request(url, headers={'User-Agent': 'ZecNode/1.0'})
+        with urllib.request.urlopen(req, timeout=5) as response:
+            data = json.loads(response.read().decode())
+            price = data['zcash']['usd']
+            change = data['zcash']['usd_24h_change']
+            return price, change
+    except:
+        return None, None
+
+
+class PriceThread(QThread):
+    """Background thread for fetching ZEC price"""
+    finished = pyqtSignal(object, object)  # price, change
+    
+    def run(self):
+        price, change = fetch_zec_price()
+        self.finished.emit(price, change)
 
 
 class NodeActionThread(QThread):
@@ -2840,6 +2865,13 @@ class DashboardWindow(QMainWindow):
         self._closing = False
         self.refresh_thread = None
         self._start_refresh()
+        
+        # Price timer - update every 30 seconds
+        self.price_thread = None
+        self.price_timer = QTimer()
+        self.price_timer.timeout.connect(self._fetch_price)
+        self.price_timer.start(30000)  # 30 seconds
+        self._fetch_price()  # Initial fetch
     
     def showEvent(self, event):
         """Center window when it's shown"""
@@ -2878,6 +2910,23 @@ class DashboardWindow(QMainWindow):
         title_section.addWidget(version_label)
         
         header.addLayout(title_section)
+        
+        header.addSpacing(20)
+        
+        # Price section
+        price_section = QVBoxLayout()
+        price_section.setSpacing(0)
+        
+        self.price_label = QLabel("$--")
+        self.price_label.setFont(QFont("Segoe UI", 16, QFont.Bold))
+        self.price_label.setStyleSheet("color: #e8e8e8;")
+        price_section.addWidget(self.price_label)
+        
+        self.change_label = QLabel("--%")
+        self.change_label.setStyleSheet("color: #888; font-size: 11px;")
+        price_section.addWidget(self.change_label)
+        
+        header.addLayout(price_section)
         
         header.addStretch()
         
@@ -3263,6 +3312,37 @@ class DashboardWindow(QMainWindow):
         if not ok:
             QMessageBox.warning(self, "Error", msg)
         self._start_refresh()
+    
+    def _fetch_price(self):
+        """Start background price fetch"""
+        if self._closing:
+            return
+        if self.price_thread is not None and self.price_thread.isRunning():
+            return
+        
+        self.price_thread = PriceThread()
+        self.price_thread.finished.connect(self._on_price_done)
+        self.price_thread.start()
+    
+    def _on_price_done(self, price, change):
+        """Update price display"""
+        if self._closing:
+            return
+        
+        if price is not None:
+            self.price_label.setText(f"${price:,.2f}")
+            
+            if change is not None:
+                if change >= 0:
+                    self.change_label.setText(f"▲ {change:.2f}%")
+                    self.change_label.setStyleSheet("color: #4ade80; font-size: 11px;")
+                else:
+                    self.change_label.setText(f"▼ {abs(change):.2f}%")
+                    self.change_label.setStyleSheet("color: #ef4444; font-size: 11px;")
+        else:
+            self.price_label.setText("$--")
+            self.change_label.setText("--%")
+            self.change_label.setStyleSheet("color: #888; font-size: 11px;")
     
     def _show_logs(self):
         dialog = LogsDialog(self, self.node_manager)
