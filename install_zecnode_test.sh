@@ -2835,7 +2835,7 @@ class ConfirmDialog(QDialog):
         """)
         
         layout = QVBoxLayout(container)
-        layout.setContentsMargins(25, 25, 25, 25)
+        layout.setContentsMargins(30, 25, 30, 25)
         layout.setSpacing(12)
         
         # Title
@@ -2854,13 +2854,17 @@ class ConfirmDialog(QDialog):
         
         layout.addStretch()
         
-        # Buttons - same pattern as dashboard
-        btn_row = QHBoxLayout()
-        btn_row.addStretch(1)
+        # Buttons - centered using widget
+        btn_container = QWidget()
+        btn_container.setFixedWidth(270)
+        btn_container.setStyleSheet("background: transparent; border: none;")
+        btn_layout = QHBoxLayout(btn_container)
+        btn_layout.setContentsMargins(0, 0, 0, 0)
+        btn_layout.setSpacing(20)
         
         self.no_btn = QPushButton("Cancel")
-        self.no_btn.setMinimumSize(115, 42)
-        self.no_btn.setMaximumSize(115, 42)
+        self.no_btn.setMinimumSize(120, 42)
+        self.no_btn.setMaximumSize(120, 42)
         self.no_btn.setStyleSheet("""
             QPushButton {
                 background-color: #2a2a3a;
@@ -2875,13 +2879,11 @@ class ConfirmDialog(QDialog):
             }
         """)
         self.no_btn.clicked.connect(self.reject)
-        btn_row.addWidget(self.no_btn)
-        
-        btn_row.addSpacing(20)
+        btn_layout.addWidget(self.no_btn)
         
         self.yes_btn = QPushButton("Update")
-        self.yes_btn.setMinimumSize(115, 42)
-        self.yes_btn.setMaximumSize(115, 42)
+        self.yes_btn.setMinimumSize(120, 42)
+        self.yes_btn.setMaximumSize(120, 42)
         self.yes_btn.setStyleSheet("""
             QPushButton {
                 background-color: #f4b728;
@@ -2896,8 +2898,12 @@ class ConfirmDialog(QDialog):
             }
         """)
         self.yes_btn.clicked.connect(self.accept)
-        btn_row.addWidget(self.yes_btn)
+        btn_layout.addWidget(self.yes_btn)
         
+        # Center the button container
+        btn_row = QHBoxLayout()
+        btn_row.addStretch(1)
+        btn_row.addWidget(btn_container)
         btn_row.addStretch(1)
         layout.addLayout(btn_row)
         
