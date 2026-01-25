@@ -2820,7 +2820,7 @@ class ConfirmDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle(title)
         self.setModal(True)
-        self.setFixedSize(450, 200)
+        self.setFixedSize(450, 250)
         self.setStyleSheet("""
             QDialog {
                 background-color: #1a1a24;
@@ -2828,18 +2828,11 @@ class ConfirmDialog(QDialog):
             QLabel {
                 color: #e8e8e8;
             }
-            QPushButton {
-                min-width: 100px;
-                min-height: 36px;
-                border-radius: 18px;
-                font-weight: bold;
-                font-size: 13px;
-            }
         """)
         
         layout = QVBoxLayout(self)
-        layout.setSpacing(20)
-        layout.setContentsMargins(40, 30, 40, 30)
+        layout.setSpacing(15)
+        layout.setContentsMargins(40, 25, 40, 25)
         
         # Title
         title_label = QLabel(title)
@@ -2859,31 +2852,31 @@ class ConfirmDialog(QDialog):
         # Use QDialogButtonBox - Qt handles centering
         from PyQt5.QtWidgets import QDialogButtonBox
         button_box = QDialogButtonBox()
-        button_box.setStyleSheet("""
-            QPushButton {
-                min-width: 120px;
-                padding: 8px 20px;
-            }
-        """)
         
         self.no_btn = button_box.addButton("Cancel", QDialogButtonBox.RejectRole)
+        self.no_btn.setFixedSize(130, 44)
         self.no_btn.setStyleSheet("""
             QPushButton {
                 background-color: #2a2a3a;
                 border: 1px solid #444;
                 color: #e8e8e8;
-                border-radius: 18px;
+                border-radius: 22px;
+                font-size: 13px;
+                font-weight: bold;
             }
             QPushButton:hover { background-color: #3a3a4a; }
         """)
         
         self.yes_btn = button_box.addButton("Update", QDialogButtonBox.AcceptRole)
+        self.yes_btn.setFixedSize(130, 44)
         self.yes_btn.setStyleSheet("""
             QPushButton {
                 background-color: #f4b728;
                 border: none;
                 color: #0f0f14;
-                border-radius: 18px;
+                border-radius: 22px;
+                font-size: 13px;
+                font-weight: bold;
             }
             QPushButton:hover { background-color: #f5c040; }
         """)
@@ -2892,6 +2885,7 @@ class ConfirmDialog(QDialog):
         button_box.rejected.connect(self.reject)
         
         layout.addWidget(button_box, alignment=Qt.AlignCenter)
+        layout.addSpacing(10)
     
     def accept(self):
         self.result = True
