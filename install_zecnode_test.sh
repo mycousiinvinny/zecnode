@@ -2818,69 +2818,80 @@ class ConfirmDialog(QDialog):
     
     def __init__(self, parent, title, message):
         super().__init__(parent)
-        self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
+        self.setWindowTitle(title)
         self.setModal(True)
-        self.setFixedSize(420, 230)
-        self.setStyleSheet("background-color: #1a1a24; border: 1px solid #333;")
+        self.setFixedSize(450, 200)
+        self.setStyleSheet("""
+            QDialog {
+                background-color: #1a1a24;
+            }
+            QLabel {
+                color: #e8e8e8;
+            }
+            QPushButton {
+                min-width: 100px;
+                min-height: 36px;
+                border-radius: 18px;
+                font-weight: bold;
+                font-size: 13px;
+            }
+        """)
         
-        # Center dialog on parent
-        if parent:
-            parent_geo = parent.geometry()
-            self.move(
-                parent_geo.x() + (parent_geo.width() - 420) // 2,
-                parent_geo.y() + (parent_geo.height() - 230) // 2
-            )
+        layout = QVBoxLayout(self)
+        layout.setSpacing(20)
+        layout.setContentsMargins(40, 30, 40, 30)
         
         # Title
-        title_label = QLabel(title, self)
-        title_label.setGeometry(0, 25, 420, 30)
+        title_label = QLabel(title)
         title_label.setFont(QFont("Segoe UI", 14, QFont.Bold))
-        title_label.setStyleSheet("color: #f4b728; border: none;")
+        title_label.setStyleSheet("color: #f4b728;")
         title_label.setAlignment(Qt.AlignCenter)
+        layout.addWidget(title_label)
         
         # Message
-        msg_label = QLabel(message, self)
-        msg_label.setGeometry(30, 60, 360, 80)
-        msg_label.setStyleSheet("color: #e8e8e8; font-size: 12px; border: none;")
+        msg_label = QLabel(message)
         msg_label.setAlignment(Qt.AlignCenter)
         msg_label.setWordWrap(True)
+        layout.addWidget(msg_label)
         
-        # Buttons with exact pixel math:
-        # Dialog = 420px, Button = 130px each, Gap = 30px
-        # Total button area = 130 + 30 + 130 = 290px
-        # Margin each side = (420 - 290) / 2 = 65px
-        # Cancel: x = 65
-        # Update: x = 65 + 130 + 30 = 225
+        layout.addStretch()
         
-        self.no_btn = QPushButton("Cancel", self)
-        self.no_btn.setGeometry(65, 160, 130, 46)
+        # Use QDialogButtonBox - Qt handles centering
+        from PyQt5.QtWidgets import QDialogButtonBox
+        button_box = QDialogButtonBox()
+        button_box.setStyleSheet("""
+            QPushButton {
+                min-width: 120px;
+                padding: 8px 20px;
+            }
+        """)
+        
+        self.no_btn = button_box.addButton("Cancel", QDialogButtonBox.RejectRole)
         self.no_btn.setStyleSheet("""
             QPushButton {
                 background-color: #2a2a3a;
                 border: 1px solid #444;
-                border-radius: 23px;
                 color: #e8e8e8;
-                font-size: 13px;
-                font-weight: bold;
+                border-radius: 18px;
             }
             QPushButton:hover { background-color: #3a3a4a; }
         """)
-        self.no_btn.clicked.connect(self.reject)
         
-        self.yes_btn = QPushButton("Update", self)
-        self.yes_btn.setGeometry(225, 160, 130, 46)
+        self.yes_btn = button_box.addButton("Update", QDialogButtonBox.AcceptRole)
         self.yes_btn.setStyleSheet("""
             QPushButton {
                 background-color: #f4b728;
                 border: none;
-                border-radius: 23px;
                 color: #0f0f14;
-                font-size: 13px;
-                font-weight: bold;
+                border-radius: 18px;
             }
             QPushButton:hover { background-color: #f5c040; }
         """)
-        self.yes_btn.clicked.connect(self.accept)
+        
+        button_box.accepted.connect(self.accept)
+        button_box.rejected.connect(self.reject)
+        
+        layout.addWidget(button_box, alignment=Qt.AlignCenter)
     
     def accept(self):
         self.result = True
