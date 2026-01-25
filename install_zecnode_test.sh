@@ -3471,12 +3471,6 @@ class DashboardWindow(QMainWindow):
         
         menu = QMenu()
         
-        show_action = QAction("Show Dashboard", self)
-        show_action.triggered.connect(self._show_dashboard)
-        menu.addAction(show_action)
-        
-        menu.addSeparator()
-        
         self.tray_stop = QAction("Stop Node", self)
         self.tray_stop.triggered.connect(self._stop)
         menu.addAction(self.tray_stop)
