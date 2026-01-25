@@ -2813,6 +2813,163 @@ class StatusDot(QWidget):
         painter.drawEllipse(1, 1, 10, 10)
 
 
+class ConfirmDialog(QDialog):
+    """Custom styled confirmation dialog matching ZecNode theme"""
+    
+    def __init__(self, parent, title, message):
+        super().__init__(parent)
+        self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
+        self.setModal(True)
+        self.setFixedSize(320, 180)
+        self.setAttribute(Qt.WA_TranslucentBackground)
+        
+        # Main container with rounded corners
+        container = QFrame(self)
+        container.setGeometry(0, 0, 320, 180)
+        container.setStyleSheet("""
+            QFrame {
+                background-color: #1a1a24;
+                border: 1px solid #333;
+                border-radius: 15px;
+            }
+        """)
+        
+        layout = QVBoxLayout(container)
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(15)
+        
+        # Title
+        title_label = QLabel(title)
+        title_label.setFont(QFont("Segoe UI", 14, QFont.Bold))
+        title_label.setStyleSheet("color: #f4b728; border: none; background: transparent;")
+        title_label.setAlignment(Qt.AlignCenter)
+        layout.addWidget(title_label)
+        
+        # Message
+        msg_label = QLabel(message)
+        msg_label.setStyleSheet("color: #e8e8e8; font-size: 12px; border: none; background: transparent;")
+        msg_label.setAlignment(Qt.AlignCenter)
+        msg_label.setWordWrap(True)
+        layout.addWidget(msg_label)
+        
+        layout.addStretch()
+        
+        # Buttons
+        btn_row = QHBoxLayout()
+        btn_row.setSpacing(15)
+        
+        self.no_btn = QPushButton("Cancel")
+        self.no_btn.setFixedSize(100, 36)
+        self.no_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #2a2a3a;
+                border: 1px solid #444;
+                border-radius: 18px;
+                color: #e8e8e8;
+                font-size: 13px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #3a3a4a;
+            }
+        """)
+        self.no_btn.clicked.connect(self.reject)
+        btn_row.addWidget(self.no_btn)
+        
+        self.yes_btn = QPushButton("Update")
+        self.yes_btn.setFixedSize(100, 36)
+        self.yes_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #f4b728;
+                border: none;
+                border-radius: 18px;
+                color: #0f0f14;
+                font-size: 13px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #f5c040;
+            }
+        """)
+        self.yes_btn.clicked.connect(self.accept)
+        btn_row.addWidget(self.yes_btn)
+        
+        layout.addLayout(btn_row)
+        
+        self.result = False
+    
+    def accept(self):
+        self.result = True
+        super().accept()
+
+
+class MessageDialog(QDialog):
+    """Custom styled message dialog matching ZecNode theme"""
+    
+    def __init__(self, parent, title, message, is_error=False):
+        super().__init__(parent)
+        self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
+        self.setModal(True)
+        self.setFixedSize(300, 150)
+        self.setAttribute(Qt.WA_TranslucentBackground)
+        
+        # Main container with rounded corners
+        container = QFrame(self)
+        container.setGeometry(0, 0, 300, 150)
+        container.setStyleSheet("""
+            QFrame {
+                background-color: #1a1a24;
+                border: 1px solid #333;
+                border-radius: 15px;
+            }
+        """)
+        
+        layout = QVBoxLayout(container)
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(15)
+        
+        # Title
+        title_label = QLabel(title)
+        title_label.setFont(QFont("Segoe UI", 14, QFont.Bold))
+        color = "#ef4444" if is_error else "#4ade80"
+        title_label.setStyleSheet(f"color: {color}; border: none; background: transparent;")
+        title_label.setAlignment(Qt.AlignCenter)
+        layout.addWidget(title_label)
+        
+        # Message
+        msg_label = QLabel(message)
+        msg_label.setStyleSheet("color: #e8e8e8; font-size: 12px; border: none; background: transparent;")
+        msg_label.setAlignment(Qt.AlignCenter)
+        msg_label.setWordWrap(True)
+        layout.addWidget(msg_label)
+        
+        layout.addStretch()
+        
+        # OK Button
+        ok_btn = QPushButton("OK")
+        ok_btn.setFixedSize(80, 36)
+        ok_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #f4b728;
+                border: none;
+                border-radius: 18px;
+                color: #0f0f14;
+                font-size: 13px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #f5c040;
+            }
+        """)
+        ok_btn.clicked.connect(self.accept)
+        
+        btn_layout = QHBoxLayout()
+        btn_layout.addStretch()
+        btn_layout.addWidget(ok_btn)
+        btn_layout.addStretch()
+        layout.addLayout(btn_layout)
+
+
 class UpdateDialog(QDialog):
     """Loading dialog with pulsing Zcash logo"""
     
@@ -2821,15 +2978,28 @@ class UpdateDialog(QDialog):
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
         self.setModal(True)
         self.setFixedSize(250, 180)
-        self.setStyleSheet("background-color: #0f0f14; border: 1px solid #333; border-radius: 15px;")
+        self.setAttribute(Qt.WA_TranslucentBackground)
         
-        layout = QVBoxLayout(self)
+        # Main container with rounded corners
+        container = QFrame(self)
+        container.setGeometry(0, 0, 250, 180)
+        container.setStyleSheet("""
+            QFrame {
+                background-color: #1a1a24;
+                border: 1px solid #333;
+                border-radius: 15px;
+            }
+        """)
+        
+        layout = QVBoxLayout(container)
         layout.setAlignment(Qt.AlignCenter)
         layout.setSpacing(20)
+        layout.setContentsMargins(20, 25, 20, 25)
         
         # Zcash logo (will pulse)
         self.logo_label = QLabel()
         self.logo_label.setAlignment(Qt.AlignCenter)
+        self.logo_label.setStyleSheet("border: none; background: transparent;")
         self._opacity = 1.0
         self._fading_out = True
         
@@ -2840,14 +3010,14 @@ class UpdateDialog(QDialog):
             self.logo_label.setPixmap(pixmap)
         else:
             self.logo_label.setText("Ⓩ")
-            self.logo_label.setStyleSheet("font-size: 48px; color: #f4b728;")
+            self.logo_label.setStyleSheet("font-size: 48px; color: #f4b728; border: none; background: transparent;")
         
         layout.addWidget(self.logo_label)
         
         # Message
         self.message_label = QLabel(message)
         self.message_label.setAlignment(Qt.AlignCenter)
-        self.message_label.setStyleSheet("color: #e8e8e8; font-size: 14px; border: none;")
+        self.message_label.setStyleSheet("color: #e8e8e8; font-size: 14px; border: none; background: transparent;")
         layout.addWidget(self.message_label)
         
         # Pulse animation timer
@@ -2865,7 +3035,6 @@ class UpdateDialog(QDialog):
             if self._opacity >= 1.0:
                 self._fading_out = True
         
-        self.logo_label.setStyleSheet(f"opacity: {self._opacity}; border: none;")
         # Use setGraphicsEffect for actual opacity
         from PyQt5.QtWidgets import QGraphicsOpacityEffect
         effect = QGraphicsOpacityEffect()
@@ -2913,17 +3082,42 @@ class UpdateThread(QThread):
                     self.finished.emit(False, "Failed to pull Zebra image")
                     return
                 
-                # Get data path from existing container BEFORE removing it
-                data_path = self.data_path or "/mnt/zcash"
+                # Get ALL mount info from existing container BEFORE removing it
+                volume_mounts = []
+                port_mappings = []
                 try:
+                    # Get volume mounts
                     mount_result = subprocess.run(
-                        ["docker", "inspect", "-f", "{{range .Mounts}}{{.Source}}{{end}}", "zebra"],
+                        ["docker", "inspect", "-f", "{{range .Mounts}}{{.Source}}:{{.Destination}} {{end}}", "zebra"],
                         capture_output=True, text=True, timeout=10
                     )
                     if mount_result.returncode == 0 and mount_result.stdout.strip():
-                        data_path = mount_result.stdout.strip()
+                        mounts = mount_result.stdout.strip().split()
+                        for mount in mounts:
+                            if ':' in mount:
+                                volume_mounts.append(mount)
+                    
+                    # Get port mappings
+                    port_result = subprocess.run(
+                        ["docker", "inspect", "-f", "{{range $p, $conf := .NetworkSettings.Ports}}{{$p}} {{end}}", "zebra"],
+                        capture_output=True, text=True, timeout=10
+                    )
+                    if port_result.returncode == 0:
+                        ports = port_result.stdout.strip().split()
+                        for port in ports:
+                            if '/tcp' in port:
+                                port_num = port.replace('/tcp', '')
+                                port_mappings.append(f"{port_num}:{port_num}")
                 except:
                     pass
+                
+                # Fallback if we couldn't get mounts
+                if not volume_mounts:
+                    data_path = self.data_path or "/mnt/zcash"
+                    volume_mounts = [f"{data_path}:/data"]
+                
+                if not port_mappings:
+                    port_mappings = ["8233:8233"]
                 
                 # Check if container is running
                 running = subprocess.run(
@@ -2939,15 +3133,24 @@ class UpdateThread(QThread):
                 # Remove old container
                 subprocess.run(["docker", "rm", "zebra"], capture_output=True, timeout=10)
                 
-                # Start new container with SAME data path from old container
-                result = subprocess.run([
+                # Build docker run command with same mounts
+                docker_cmd = [
                     "docker", "run", "-d",
                     "--name", "zebra",
                     "--restart", "unless-stopped",
-                    "-v", f"{data_path}:/data",
-                    "-p", "8233:8233",
-                    "zfnd/zebra:latest"
-                ], capture_output=True, text=True, timeout=30)
+                ]
+                
+                # Add all volume mounts
+                for mount in volume_mounts:
+                    docker_cmd.extend(["-v", mount])
+                
+                # Add all port mappings
+                for port in port_mappings:
+                    docker_cmd.extend(["-p", port])
+                
+                docker_cmd.append("zfnd/zebra:latest")
+                
+                result = subprocess.run(docker_cmd, capture_output=True, text=True, timeout=30)
                 
                 if result.returncode == 0:
                     self.finished.emit(True, "Zebra updated successfully!")
@@ -3505,12 +3708,12 @@ class DashboardWindow(QMainWindow):
     
     def _update_zecnode(self):
         """Update ZecNode from GitHub"""
-        reply = QMessageBox.question(
-            self, "Update ZecNode",
-            "Download and install the latest version of ZecNode?\n\nThe app will restart after updating.",
-            QMessageBox.Yes | QMessageBox.No
+        dialog = ConfirmDialog(
+            self, 
+            "Update ZecNode",
+            "Download and install the latest version?\n\nThe app will restart after updating."
         )
-        if reply != QMessageBox.Yes:
+        if dialog.exec_() != QDialog.Accepted:
             return
         
         self.update_dialog = UpdateDialog(self, "Updating ZecNode...")
@@ -3522,12 +3725,12 @@ class DashboardWindow(QMainWindow):
     
     def _update_zebra(self):
         """Update Zebra to latest version"""
-        reply = QMessageBox.question(
-            self, "Update Zebra",
-            "Download and install the latest Zebra version?\n\nThe node will restart during the update.\nYour blockchain data will be preserved.",
-            QMessageBox.Yes | QMessageBox.No
+        dialog = ConfirmDialog(
+            self,
+            "Update Zebra", 
+            "Download and install the latest version?\n\nThe node will restart during update.\nBlockchain data will be preserved."
         )
-        if reply != QMessageBox.Yes:
+        if dialog.exec_() != QDialog.Accepted:
             return
         
         self.update_dialog = UpdateDialog(self, "Updating Zebra...")
@@ -3544,14 +3747,16 @@ class DashboardWindow(QMainWindow):
             self.update_dialog.close()
         
         if success:
-            QMessageBox.information(self, "Update Complete", message)
+            dialog = MessageDialog(self, "Update Complete", message, is_error=False)
+            dialog.exec_()
             if "restart" in message.lower():
                 # Restart the app
                 import subprocess
                 subprocess.Popen(["python3", os.path.abspath(__file__)])
                 self._quit()
         else:
-            QMessageBox.warning(self, "Update Failed", message)
+            dialog = MessageDialog(self, "Update Failed", message, is_error=True)
+            dialog.exec_()
         
         self._start_refresh()
     
