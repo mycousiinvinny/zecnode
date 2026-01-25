@@ -2820,47 +2820,37 @@ class ConfirmDialog(QDialog):
         super().__init__(parent)
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
         self.setModal(True)
-        self.setFixedSize(360, 220)
-        self.setStyleSheet("""
-            QDialog {
-                background-color: #1a1a24;
-                border: 1px solid #333;
-                border-radius: 15px;
-            }
-        """)
+        self.setFixedSize(400, 230)
+        self.setStyleSheet("background-color: #1a1a24; border: 1px solid #333; border-radius: 15px;")
         
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(25, 25, 25, 25)
-        layout.setSpacing(12)
-        
-        # Title
-        title_label = QLabel(title)
+        # Title - manually centered
+        title_label = QLabel(title, self)
+        title_label.setFixedSize(400, 30)
+        title_label.move(0, 25)
         title_label.setFont(QFont("Segoe UI", 14, QFont.Bold))
-        title_label.setStyleSheet("color: #f4b728;")
+        title_label.setStyleSheet("color: #f4b728; border: none;")
         title_label.setAlignment(Qt.AlignCenter)
-        layout.addWidget(title_label)
         
-        # Message
-        msg_label = QLabel(message)
-        msg_label.setStyleSheet("color: #e8e8e8; font-size: 12px;")
+        # Message - manually centered
+        msg_label = QLabel(message, self)
+        msg_label.setFixedSize(360, 80)
+        msg_label.move(20, 60)
+        msg_label.setStyleSheet("color: #e8e8e8; font-size: 12px; border: none;")
         msg_label.setAlignment(Qt.AlignCenter)
         msg_label.setWordWrap(True)
-        layout.addWidget(msg_label)
         
-        layout.addStretch()
+        # Buttons - manually positioned for perfect centering
+        # Dialog is 400px wide, buttons are 120px each with 20px gap = 260px total
+        # Left margin = (400 - 260) / 2 = 70px
         
-        # Buttons
-        btn_row = QHBoxLayout()
-        btn_row.addStretch()
-        
-        self.no_btn = QPushButton("Cancel")
-        self.no_btn.setFixedWidth(120)
-        self.no_btn.setFixedHeight(42)
+        self.no_btn = QPushButton("Cancel", self)
+        self.no_btn.setFixedSize(120, 44)
+        self.no_btn.move(70, 165)
         self.no_btn.setStyleSheet("""
             QPushButton {
                 background-color: #2a2a3a;
                 border: 1px solid #444;
-                border-radius: 21px;
+                border-radius: 22px;
                 color: #e8e8e8;
                 font-size: 13px;
                 font-weight: bold;
@@ -2870,18 +2860,15 @@ class ConfirmDialog(QDialog):
             }
         """)
         self.no_btn.clicked.connect(self.reject)
-        btn_row.addWidget(self.no_btn)
         
-        btn_row.addSpacing(20)
-        
-        self.yes_btn = QPushButton("Update")
-        self.yes_btn.setFixedWidth(120)
-        self.yes_btn.setFixedHeight(42)
+        self.yes_btn = QPushButton("Update", self)
+        self.yes_btn.setFixedSize(120, 44)
+        self.yes_btn.move(210, 165)
         self.yes_btn.setStyleSheet("""
             QPushButton {
                 background-color: #f4b728;
                 border: none;
-                border-radius: 21px;
+                border-radius: 22px;
                 color: #0f0f14;
                 font-size: 13px;
                 font-weight: bold;
@@ -2891,10 +2878,6 @@ class ConfirmDialog(QDialog):
             }
         """)
         self.yes_btn.clicked.connect(self.accept)
-        btn_row.addWidget(self.yes_btn)
-        
-        btn_row.addStretch()
-        layout.addLayout(btn_row)
         
         self.result = False
     
