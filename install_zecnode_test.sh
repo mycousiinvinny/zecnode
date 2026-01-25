@@ -2854,9 +2854,10 @@ class ConfirmDialog(QDialog):
         
         layout.addStretch()
         
-        # Buttons
+        # Buttons - centered
         btn_row = QHBoxLayout()
         btn_row.setSpacing(15)
+        btn_row.addStretch()
         
         self.no_btn = QPushButton("Cancel")
         self.no_btn.setFixedSize(100, 36)
@@ -2894,6 +2895,7 @@ class ConfirmDialog(QDialog):
         self.yes_btn.clicked.connect(self.accept)
         btn_row.addWidget(self.yes_btn)
         
+        btn_row.addStretch()
         layout.addLayout(btn_row)
         
         self.result = False
