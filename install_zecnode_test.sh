@@ -2820,66 +2820,67 @@ class ConfirmDialog(QDialog):
         super().__init__(parent)
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
         self.setModal(True)
-        self.setFixedSize(400, 230)
-        self.setStyleSheet("background-color: #1a1a24; border: 1px solid #333; border-radius: 15px;")
+        self.setFixedSize(420, 230)
+        self.setStyleSheet("background-color: #1a1a24; border: 1px solid #333;")
         
-        # Title - manually centered
+        # Center dialog on parent
+        if parent:
+            parent_geo = parent.geometry()
+            self.move(
+                parent_geo.x() + (parent_geo.width() - 420) // 2,
+                parent_geo.y() + (parent_geo.height() - 230) // 2
+            )
+        
+        # Title
         title_label = QLabel(title, self)
-        title_label.setFixedSize(400, 30)
-        title_label.move(0, 25)
+        title_label.setGeometry(0, 25, 420, 30)
         title_label.setFont(QFont("Segoe UI", 14, QFont.Bold))
         title_label.setStyleSheet("color: #f4b728; border: none;")
         title_label.setAlignment(Qt.AlignCenter)
         
-        # Message - manually centered
+        # Message
         msg_label = QLabel(message, self)
-        msg_label.setFixedSize(360, 80)
-        msg_label.move(20, 60)
+        msg_label.setGeometry(30, 60, 360, 80)
         msg_label.setStyleSheet("color: #e8e8e8; font-size: 12px; border: none;")
         msg_label.setAlignment(Qt.AlignCenter)
         msg_label.setWordWrap(True)
         
-        # Buttons - manually positioned for perfect centering
-        # Dialog is 400px wide, buttons are 120px each with 20px gap = 260px total
-        # Left margin = (400 - 260) / 2 = 70px
+        # Buttons with exact pixel math:
+        # Dialog = 420px, Button = 130px each, Gap = 30px
+        # Total button area = 130 + 30 + 130 = 290px
+        # Margin each side = (420 - 290) / 2 = 65px
+        # Cancel: x = 65
+        # Update: x = 65 + 130 + 30 = 225
         
         self.no_btn = QPushButton("Cancel", self)
-        self.no_btn.setFixedSize(120, 44)
-        self.no_btn.move(70, 165)
+        self.no_btn.setGeometry(65, 160, 130, 46)
         self.no_btn.setStyleSheet("""
             QPushButton {
                 background-color: #2a2a3a;
                 border: 1px solid #444;
-                border-radius: 22px;
+                border-radius: 23px;
                 color: #e8e8e8;
                 font-size: 13px;
                 font-weight: bold;
             }
-            QPushButton:hover {
-                background-color: #3a3a4a;
-            }
+            QPushButton:hover { background-color: #3a3a4a; }
         """)
         self.no_btn.clicked.connect(self.reject)
         
         self.yes_btn = QPushButton("Update", self)
-        self.yes_btn.setFixedSize(120, 44)
-        self.yes_btn.move(210, 165)
+        self.yes_btn.setGeometry(225, 160, 130, 46)
         self.yes_btn.setStyleSheet("""
             QPushButton {
                 background-color: #f4b728;
                 border: none;
-                border-radius: 22px;
+                border-radius: 23px;
                 color: #0f0f14;
                 font-size: 13px;
                 font-weight: bold;
             }
-            QPushButton:hover {
-                background-color: #f5c040;
-            }
+            QPushButton:hover { background-color: #f5c040; }
         """)
         self.yes_btn.clicked.connect(self.accept)
-        
-        self.result = False
     
     def accept(self):
         self.result = True
