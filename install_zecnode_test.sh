@@ -337,7 +337,7 @@ import json
 from pathlib import Path
 from typing import Optional
 
-VERSION = "1.0.3"
+VERSION = "1.0.4"
 
 
 class Config:
@@ -3086,40 +3086,32 @@ class UpdateThread(QThread):
                 
                 # Get ALL mount info from existing container BEFORE removing it
                 volume_mounts = []
-                port_mappings = []
+                port_mappings = ["8233:8233"]  # Default port
+                
                 try:
-                    # Get volume mounts
+                    # Get volume mounts using JSON format for reliable parsing
                     mount_result = subprocess.run(
-                        ["docker", "inspect", "-f", "{{range .Mounts}}{{.Source}}:{{.Destination}} {{end}}", "zebra"],
+                        ["docker", "inspect", "--format", "{{json .Mounts}}", "zebra"],
                         capture_output=True, text=True, timeout=10
                     )
                     if mount_result.returncode == 0 and mount_result.stdout.strip():
-                        mounts = mount_result.stdout.strip().split()
+                        import json
+                        mounts = json.loads(mount_result.stdout.strip())
                         for mount in mounts:
-                            if ':' in mount:
-                                volume_mounts.append(mount)
-                    
-                    # Get port mappings
-                    port_result = subprocess.run(
-                        ["docker", "inspect", "-f", "{{range $p, $conf := .NetworkSettings.Ports}}{{$p}} {{end}}", "zebra"],
-                        capture_output=True, text=True, timeout=10
-                    )
-                    if port_result.returncode == 0:
-                        ports = port_result.stdout.strip().split()
-                        for port in ports:
-                            if '/tcp' in port:
-                                port_num = port.replace('/tcp', '')
-                                port_mappings.append(f"{port_num}:{port_num}")
+                            source = mount.get('Source', '')
+                            dest = mount.get('Destination', '')
+                            if source and dest:
+                                volume_mounts.append(f"{source}:{dest}")
                 except:
                     pass
                 
                 # Fallback if we couldn't get mounts
                 if not volume_mounts:
                     data_path = self.data_path or "/mnt/zcash"
-                    volume_mounts = [f"{data_path}:/data"]
-                
-                if not port_mappings:
-                    port_mappings = ["8233:8233"]
+                    volume_mounts = [
+                        f"{data_path}/zebra-cache:/var/cache/zebrad-cache",
+                        f"{data_path}/zebra-state:/var/lib/zebrad"
+                    ]
                 
                 # Check if container is running
                 running = subprocess.run(
@@ -3146,9 +3138,8 @@ class UpdateThread(QThread):
                 for mount in volume_mounts:
                     docker_cmd.extend(["-v", mount])
                 
-                # Add all port mappings
-                for port in port_mappings:
-                    docker_cmd.extend(["-p", port])
+                # Add port mapping
+                docker_cmd.extend(["-p", "8233:8233"])
                 
                 docker_cmd.append("zfnd/zebra:latest")
                 
