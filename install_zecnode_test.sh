@@ -1545,7 +1545,7 @@ gsettings set org.gnome.desktop.session idle-delay 0 2>/dev/null || true
             logs = result.stdout + result.stderr
             
             # Find ALL matches and take the LAST one (most recent)
-            sync_matches = re.findall(r'nc_percent=([0-9.]+)%?', logs)
+            sync_matches = re.findall(r'sync_percent=([0-9.]+)%?', logs)
             if sync_matches:
                 status.sync_percent = float(sync_matches[-1])
             
@@ -2913,6 +2913,18 @@ class UpdateThread(QThread):
                     self.finished.emit(False, "Failed to pull Zebra image")
                     return
                 
+                # Get data path from existing container BEFORE removing it
+                data_path = self.data_path or "/mnt/zcash"
+                try:
+                    mount_result = subprocess.run(
+                        ["docker", "inspect", "-f", "{{range .Mounts}}{{.Source}}{{end}}", "zebra"],
+                        capture_output=True, text=True, timeout=10
+                    )
+                    if mount_result.returncode == 0 and mount_result.stdout.strip():
+                        data_path = mount_result.stdout.strip()
+                except:
+                    pass
+                
                 # Check if container is running
                 running = subprocess.run(
                     ["docker", "ps", "-q", "-f", "name=zebra"],
@@ -2927,8 +2939,7 @@ class UpdateThread(QThread):
                 # Remove old container
                 subprocess.run(["docker", "rm", "zebra"], capture_output=True, timeout=10)
                 
-                # Start new container with same data path
-                data_path = self.data_path or "/mnt/zcash"
+                # Start new container with SAME data path from old container
                 result = subprocess.run([
                     "docker", "run", "-d",
                     "--name", "zebra",
