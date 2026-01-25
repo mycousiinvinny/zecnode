@@ -3298,9 +3298,9 @@ class DashboardWindow(QMainWindow):
         update_zecnode.triggered.connect(self._update_zecnode)
         menu.addAction(update_zecnode)
         
-        update_zebra = QAction("Update Zebra", self)
-        update_zebra.triggered.connect(self._update_zebra)
-        menu.addAction(update_zebra)
+        self.tray_update_zebra = QAction("Update Zebra", self)
+        self.tray_update_zebra.triggered.connect(self._update_zebra)
+        menu.addAction(self.tray_update_zebra)
         
         menu.addSeparator()
         
@@ -3424,6 +3424,7 @@ class DashboardWindow(QMainWindow):
         
         self.tray_stop.setVisible(status.running)
         self.tray_start.setVisible(not status.running)
+        self.tray_update_zebra.setEnabled(not status.running)
     
     def _stop(self):
         self._action_in_progress = True
