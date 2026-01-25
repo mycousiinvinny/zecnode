@@ -2834,37 +2834,23 @@ class ConfirmDialog(QDialog):
             }
         """)
         
-        layout = QVBoxLayout(container)
-        layout.setContentsMargins(30, 25, 30, 25)
-        layout.setSpacing(12)
-        
-        # Title
-        title_label = QLabel(title)
+        # Title - absolute position
+        title_label = QLabel(title, container)
+        title_label.setGeometry(0, 25, 360, 30)
         title_label.setFont(QFont("Segoe UI", 14, QFont.Bold))
         title_label.setStyleSheet("color: #f4b728; border: none; background: transparent;")
         title_label.setAlignment(Qt.AlignCenter)
-        layout.addWidget(title_label)
         
-        # Message
-        msg_label = QLabel(message)
+        # Message - absolute position  
+        msg_label = QLabel(message, container)
+        msg_label.setGeometry(20, 60, 320, 80)
         msg_label.setStyleSheet("color: #e8e8e8; font-size: 12px; border: none; background: transparent;")
         msg_label.setAlignment(Qt.AlignCenter)
         msg_label.setWordWrap(True)
-        layout.addWidget(msg_label)
         
-        layout.addStretch()
-        
-        # Buttons - centered using widget
-        btn_container = QWidget()
-        btn_container.setFixedWidth(270)
-        btn_container.setStyleSheet("background: transparent; border: none;")
-        btn_layout = QHBoxLayout(btn_container)
-        btn_layout.setContentsMargins(0, 0, 0, 0)
-        btn_layout.setSpacing(20)
-        
-        self.no_btn = QPushButton("Cancel")
-        self.no_btn.setMinimumSize(120, 42)
-        self.no_btn.setMaximumSize(120, 42)
+        # Cancel button - absolute position (360 - 120 - 120 - 20 gap) / 2 = 50
+        self.no_btn = QPushButton("Cancel", container)
+        self.no_btn.setGeometry(50, 155, 120, 42)
         self.no_btn.setStyleSheet("""
             QPushButton {
                 background-color: #2a2a3a;
@@ -2879,11 +2865,10 @@ class ConfirmDialog(QDialog):
             }
         """)
         self.no_btn.clicked.connect(self.reject)
-        btn_layout.addWidget(self.no_btn)
         
-        self.yes_btn = QPushButton("Update")
-        self.yes_btn.setMinimumSize(120, 42)
-        self.yes_btn.setMaximumSize(120, 42)
+        # Update button - absolute position
+        self.yes_btn = QPushButton("Update", container)
+        self.yes_btn.setGeometry(190, 155, 120, 42)
         self.yes_btn.setStyleSheet("""
             QPushButton {
                 background-color: #f4b728;
@@ -2898,14 +2883,6 @@ class ConfirmDialog(QDialog):
             }
         """)
         self.yes_btn.clicked.connect(self.accept)
-        btn_layout.addWidget(self.yes_btn)
-        
-        # Center the button container
-        btn_row = QHBoxLayout()
-        btn_row.addStretch(1)
-        btn_row.addWidget(btn_container)
-        btn_row.addStretch(1)
-        layout.addLayout(btn_row)
         
         self.result = False
     
