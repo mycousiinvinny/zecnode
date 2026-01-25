@@ -3719,7 +3719,7 @@ class DashboardWindow(QMainWindow):
         dialog = ConfirmDialog(
             self,
             "Update Zebra", 
-            "Download and install the latest version?\n\nThe node will restart during update.\nBlockchain data will be preserved."
+            "Download and install the latest version?\n\nWarning: Major updates may require a full resync of the blockchain."
         )
         if dialog.exec_() != QDialog.Accepted:
             return
