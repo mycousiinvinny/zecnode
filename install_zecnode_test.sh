@@ -2820,12 +2820,12 @@ class ConfirmDialog(QDialog):
         super().__init__(parent)
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
         self.setModal(True)
-        self.setFixedSize(340, 200)
+        self.setFixedSize(360, 220)
         self.setAttribute(Qt.WA_TranslucentBackground)
         
         # Main container with rounded corners
         container = QFrame(self)
-        container.setGeometry(0, 0, 340, 200)
+        container.setGeometry(0, 0, 360, 220)
         container.setStyleSheet("""
             QFrame {
                 background-color: #1a1a24;
@@ -2854,20 +2854,18 @@ class ConfirmDialog(QDialog):
         
         layout.addStretch()
         
-        # Buttons in a centered widget
-        btn_widget = QWidget()
-        btn_widget.setStyleSheet("background: transparent; border: none;")
-        btn_layout = QHBoxLayout(btn_widget)
-        btn_layout.setContentsMargins(0, 0, 0, 0)
-        btn_layout.setSpacing(20)
+        # Buttons - same pattern as dashboard
+        btn_row = QHBoxLayout()
+        btn_row.addStretch(1)
         
         self.no_btn = QPushButton("Cancel")
-        self.no_btn.setFixedSize(110, 38)
+        self.no_btn.setMinimumSize(115, 42)
+        self.no_btn.setMaximumSize(115, 42)
         self.no_btn.setStyleSheet("""
             QPushButton {
                 background-color: #2a2a3a;
                 border: 1px solid #444;
-                border-radius: 19px;
+                border-radius: 21px;
                 color: #e8e8e8;
                 font-size: 13px;
                 font-weight: bold;
@@ -2877,15 +2875,18 @@ class ConfirmDialog(QDialog):
             }
         """)
         self.no_btn.clicked.connect(self.reject)
-        btn_layout.addWidget(self.no_btn)
+        btn_row.addWidget(self.no_btn)
+        
+        btn_row.addSpacing(20)
         
         self.yes_btn = QPushButton("Update")
-        self.yes_btn.setFixedSize(110, 38)
+        self.yes_btn.setMinimumSize(115, 42)
+        self.yes_btn.setMaximumSize(115, 42)
         self.yes_btn.setStyleSheet("""
             QPushButton {
                 background-color: #f4b728;
                 border: none;
-                border-radius: 19px;
+                border-radius: 21px;
                 color: #0f0f14;
                 font-size: 13px;
                 font-weight: bold;
@@ -2895,9 +2896,10 @@ class ConfirmDialog(QDialog):
             }
         """)
         self.yes_btn.clicked.connect(self.accept)
-        btn_layout.addWidget(self.yes_btn)
+        btn_row.addWidget(self.yes_btn)
         
-        layout.addWidget(btn_widget, alignment=Qt.AlignCenter)
+        btn_row.addStretch(1)
+        layout.addLayout(btn_row)
         
         self.result = False
     
