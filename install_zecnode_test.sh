@@ -3207,9 +3207,12 @@ class DashboardWindow(QMainWindow):
         self.config = config
         self.node_manager = NodeManager(config.get_data_path())
         self._centered = False
+        self._drag_pos = None
         
         self.setWindowTitle("ZecNode")
-        self.setMinimumSize(600, 550)  # Larger base size for 4K
+        self.setWindowFlags(Qt.FramelessWindowHint)
+        self.setAttribute(Qt.WA_TranslucentBackground)
+        self.setMinimumSize(600, 550)
         self.resize(600, 550)
         
         self._setup_ui()
@@ -3217,7 +3220,7 @@ class DashboardWindow(QMainWindow):
         
         self.timer = QTimer()
         self.timer.timeout.connect(self._start_refresh)
-        self.timer.start(1000)  # 1 second for real-time updates
+        self.timer.start(1000)
         self._action_in_progress = False
         self._closing = False
         self.refresh_thread = None
@@ -3227,8 +3230,24 @@ class DashboardWindow(QMainWindow):
         self.price_thread = None
         self.price_timer = QTimer()
         self.price_timer.timeout.connect(self._fetch_price)
-        self.price_timer.start(30000)  # 30 seconds
-        self._fetch_price()  # Initial fetch
+        self.price_timer.start(30000)
+        self._fetch_price()
+    
+    def mousePressEvent(self, event):
+        """Enable dragging the window"""
+        if event.button() == Qt.LeftButton and event.pos().y() < 50:
+            self._drag_pos = event.globalPos() - self.frameGeometry().topLeft()
+            event.accept()
+    
+    def mouseMoveEvent(self, event):
+        """Handle window dragging"""
+        if self._drag_pos and event.buttons() == Qt.LeftButton:
+            self.move(event.globalPos() - self._drag_pos)
+            event.accept()
+    
+    def mouseReleaseEvent(self, event):
+        """Stop dragging"""
+        self._drag_pos = None
     
     def showEvent(self, event):
         """Center window when it's shown"""
@@ -3247,9 +3266,71 @@ class DashboardWindow(QMainWindow):
     def _setup_ui(self):
         central = QWidget()
         self.setCentralWidget(central)
-        layout = QVBoxLayout(central)
-        layout.setContentsMargins(25, 25, 25, 25)
+        
+        # Main container with rounded corners
+        self.container = QFrame(central)
+        self.container.setStyleSheet("""
+            QFrame {
+                background-color: #0f0f14;
+                border: 1px solid #333;
+                border-radius: 15px;
+            }
+        """)
+        
+        # Layout for container
+        container_layout = QVBoxLayout(central)
+        container_layout.setContentsMargins(0, 0, 0, 0)
+        container_layout.addWidget(self.container)
+        
+        layout = QVBoxLayout(self.container)
+        layout.setContentsMargins(25, 15, 25, 25)
         layout.setSpacing(0)
+        
+        # Custom title bar with window controls
+        title_bar = QHBoxLayout()
+        title_bar.setContentsMargins(0, 0, 0, 10)
+        
+        # Spacer to center title
+        title_bar.addStretch()
+        
+        window_title = QLabel("ZecNode")
+        window_title.setStyleSheet("color: #666; font-size: 12px; border: none; background: transparent;")
+        title_bar.addWidget(window_title)
+        
+        title_bar.addStretch()
+        
+        # Window controls
+        minimize_btn = QPushButton("−")
+        minimize_btn.setFixedSize(30, 30)
+        minimize_btn.setStyleSheet("""
+            QPushButton {
+                background-color: transparent;
+                border: none;
+                color: #666;
+                font-size: 20px;
+                font-weight: bold;
+            }
+            QPushButton:hover { color: #fff; }
+        """)
+        minimize_btn.clicked.connect(self.showMinimized)
+        title_bar.addWidget(minimize_btn)
+        
+        close_btn = QPushButton("✕")
+        close_btn.setFixedSize(30, 30)
+        close_btn.setStyleSheet("""
+            QPushButton {
+                background-color: transparent;
+                border: none;
+                color: #666;
+                font-size: 16px;
+                font-weight: bold;
+            }
+            QPushButton:hover { color: #ff5555; }
+        """)
+        close_btn.clicked.connect(self.close)
+        title_bar.addWidget(close_btn)
+        
+        layout.addLayout(title_bar)
         
         # Header
         header = QHBoxLayout()
