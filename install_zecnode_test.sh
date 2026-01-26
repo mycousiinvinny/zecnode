@@ -2820,19 +2820,16 @@ class ConfirmDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle(title)
         self.setModal(True)
-        self.setFixedSize(450, 250)
+        self.setMinimumSize(450, 280)
         self.setStyleSheet("""
             QDialog {
                 background-color: #1a1a24;
-            }
-            QLabel {
-                color: #e8e8e8;
             }
         """)
         
         layout = QVBoxLayout(self)
         layout.setSpacing(15)
-        layout.setContentsMargins(40, 25, 40, 25)
+        layout.setContentsMargins(40, 30, 40, 30)
         
         # Title
         title_label = QLabel(title)
@@ -2843,49 +2840,55 @@ class ConfirmDialog(QDialog):
         
         # Message
         msg_label = QLabel(message)
+        msg_label.setStyleSheet("color: #e8e8e8;")
         msg_label.setAlignment(Qt.AlignCenter)
         msg_label.setWordWrap(True)
         layout.addWidget(msg_label)
         
         layout.addStretch()
         
-        # Use QDialogButtonBox - Qt handles centering
-        from PyQt5.QtWidgets import QDialogButtonBox
-        button_box = QDialogButtonBox()
+        # Simple button row
+        btn_widget = QWidget()
+        btn_layout = QHBoxLayout(btn_widget)
+        btn_layout.setContentsMargins(0, 0, 0, 0)
+        btn_layout.setSpacing(20)
         
-        self.no_btn = button_box.addButton("Cancel", QDialogButtonBox.RejectRole)
-        self.no_btn.setFixedSize(130, 44)
+        self.no_btn = QPushButton("Cancel")
+        self.no_btn.setMinimumHeight(50)
+        self.no_btn.setMinimumWidth(140)
         self.no_btn.setStyleSheet("""
             QPushButton {
                 background-color: #2a2a3a;
                 border: 1px solid #444;
                 color: #e8e8e8;
-                border-radius: 22px;
-                font-size: 13px;
+                border-radius: 25px;
+                font-size: 14px;
                 font-weight: bold;
             }
             QPushButton:hover { background-color: #3a3a4a; }
         """)
+        self.no_btn.clicked.connect(self.reject)
+        btn_layout.addWidget(self.no_btn)
         
-        self.yes_btn = button_box.addButton("Update", QDialogButtonBox.AcceptRole)
-        self.yes_btn.setFixedSize(130, 44)
+        self.yes_btn = QPushButton("Update")
+        self.yes_btn.setMinimumHeight(50)
+        self.yes_btn.setMinimumWidth(140)
         self.yes_btn.setStyleSheet("""
             QPushButton {
                 background-color: #f4b728;
                 border: none;
                 color: #0f0f14;
-                border-radius: 22px;
-                font-size: 13px;
+                border-radius: 25px;
+                font-size: 14px;
                 font-weight: bold;
             }
             QPushButton:hover { background-color: #f5c040; }
         """)
+        self.yes_btn.clicked.connect(self.accept)
+        btn_layout.addWidget(self.yes_btn)
         
-        button_box.accepted.connect(self.accept)
-        button_box.rejected.connect(self.reject)
-        
-        layout.addWidget(button_box, alignment=Qt.AlignCenter)
-        layout.addSpacing(10)
+        layout.addWidget(btn_widget, alignment=Qt.AlignCenter)
+        layout.addSpacing(20)
     
     def accept(self):
         self.result = True
