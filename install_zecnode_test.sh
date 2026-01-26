@@ -2818,40 +2818,60 @@ class ConfirmDialog(QDialog):
     
     def __init__(self, parent, title, message):
         super().__init__(parent)
-        self.setWindowTitle(title)
+        self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
         self.setModal(True)
-        self.setMinimumSize(450, 280)
-        self.setStyleSheet("""
-            QDialog {
+        self.setFixedSize(450, 280)
+        self.setAttribute(Qt.WA_TranslucentBackground)
+        
+        # Main container
+        container = QFrame(self)
+        container.setGeometry(0, 0, 450, 280)
+        container.setStyleSheet("""
+            QFrame {
                 background-color: #1a1a24;
+                border: 1px solid #333;
+                border-radius: 15px;
             }
         """)
         
-        layout = QVBoxLayout(self)
-        layout.setSpacing(15)
-        layout.setContentsMargins(40, 30, 40, 30)
+        # Close button (X) in top right
+        close_btn = QPushButton("✕", container)
+        close_btn.setGeometry(405, 10, 30, 30)
+        close_btn.setStyleSheet("""
+            QPushButton {
+                background-color: transparent;
+                border: none;
+                color: #666;
+                font-size: 18px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                color: #fff;
+            }
+        """)
+        close_btn.clicked.connect(self.reject)
         
         # Title
-        title_label = QLabel(title)
+        title_label = QLabel(title, container)
+        title_label.setGeometry(0, 30, 450, 30)
         title_label.setFont(QFont("Segoe UI", 14, QFont.Bold))
-        title_label.setStyleSheet("color: #f4b728;")
+        title_label.setStyleSheet("color: #f4b728; border: none; background: transparent;")
         title_label.setAlignment(Qt.AlignCenter)
-        layout.addWidget(title_label)
         
         # Message
-        msg_label = QLabel(message)
-        msg_label.setStyleSheet("color: #e8e8e8;")
+        msg_label = QLabel(message, container)
+        msg_label.setGeometry(40, 70, 370, 80)
+        msg_label.setStyleSheet("color: #e8e8e8; font-size: 12px; border: none; background: transparent;")
         msg_label.setAlignment(Qt.AlignCenter)
         msg_label.setWordWrap(True)
-        layout.addWidget(msg_label)
         
-        layout.addStretch()
+        # Buttons container
+        btn_widget = QWidget(container)
+        btn_widget.setGeometry(0, 180, 450, 70)
+        btn_widget.setStyleSheet("background: transparent; border: none;")
         
-        # Simple button row
-        btn_widget = QWidget()
-        btn_widget.setStyleSheet("background: transparent;")
         btn_layout = QHBoxLayout(btn_widget)
-        btn_layout.setContentsMargins(0, 0, 0, 0)
+        btn_layout.setContentsMargins(60, 0, 60, 0)
         btn_layout.setSpacing(20)
         
         self.no_btn = QPushButton("Cancel")
@@ -2887,9 +2907,6 @@ class ConfirmDialog(QDialog):
         """)
         self.yes_btn.clicked.connect(self.accept)
         btn_layout.addWidget(self.yes_btn)
-        
-        layout.addWidget(btn_widget, alignment=Qt.AlignCenter)
-        layout.addSpacing(20)
     
     def accept(self):
         self.result = True
@@ -2903,12 +2920,12 @@ class MessageDialog(QDialog):
         super().__init__(parent)
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
         self.setModal(True)
-        self.setFixedSize(300, 150)
+        self.setFixedSize(320, 180)
         self.setAttribute(Qt.WA_TranslucentBackground)
         
         # Main container with rounded corners
         container = QFrame(self)
-        container.setGeometry(0, 0, 300, 150)
+        container.setGeometry(0, 0, 320, 180)
         container.setStyleSheet("""
             QFrame {
                 background-color: #1a1a24;
@@ -2917,35 +2934,46 @@ class MessageDialog(QDialog):
             }
         """)
         
-        layout = QVBoxLayout(container)
-        layout.setContentsMargins(20, 20, 20, 20)
-        layout.setSpacing(15)
+        # Close button (X) in top right
+        close_btn = QPushButton("✕", container)
+        close_btn.setGeometry(275, 10, 30, 30)
+        close_btn.setStyleSheet("""
+            QPushButton {
+                background-color: transparent;
+                border: none;
+                color: #666;
+                font-size: 18px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                color: #fff;
+            }
+        """)
+        close_btn.clicked.connect(self.accept)
         
         # Title
-        title_label = QLabel(title)
+        title_label = QLabel(title, container)
+        title_label.setGeometry(0, 30, 320, 30)
         title_label.setFont(QFont("Segoe UI", 14, QFont.Bold))
         color = "#ef4444" if is_error else "#4ade80"
         title_label.setStyleSheet(f"color: {color}; border: none; background: transparent;")
         title_label.setAlignment(Qt.AlignCenter)
-        layout.addWidget(title_label)
         
         # Message
-        msg_label = QLabel(message)
+        msg_label = QLabel(message, container)
+        msg_label.setGeometry(20, 65, 280, 50)
         msg_label.setStyleSheet("color: #e8e8e8; font-size: 12px; border: none; background: transparent;")
         msg_label.setAlignment(Qt.AlignCenter)
         msg_label.setWordWrap(True)
-        layout.addWidget(msg_label)
-        
-        layout.addStretch()
         
         # OK Button
-        ok_btn = QPushButton("OK")
-        ok_btn.setFixedSize(80, 36)
+        ok_btn = QPushButton("OK", container)
+        ok_btn.setGeometry(120, 125, 80, 40)
         ok_btn.setStyleSheet("""
             QPushButton {
                 background-color: #f4b728;
                 border: none;
-                border-radius: 18px;
+                border-radius: 20px;
                 color: #0f0f14;
                 font-size: 13px;
                 font-weight: bold;
@@ -2955,12 +2983,6 @@ class MessageDialog(QDialog):
             }
         """)
         ok_btn.clicked.connect(self.accept)
-        
-        btn_layout = QHBoxLayout()
-        btn_layout.addStretch()
-        btn_layout.addWidget(ok_btn)
-        btn_layout.addStretch()
-        layout.addLayout(btn_layout)
 
 
 class UpdateDialog(QDialog):
