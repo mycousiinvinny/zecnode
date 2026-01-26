@@ -3585,7 +3585,9 @@ class DashboardWindow(QMainWindow):
         
         # Sync progress
         sync_pct = min(status.sync_percent, 100.0)
-        self.sync_progress.setValue(int(sync_pct))
+        # Show at least 1% on the bar if there's any progress
+        bar_value = int(sync_pct) if sync_pct >= 1.0 else (1 if sync_pct > 0 else 0)
+        self.sync_progress.setValue(bar_value)
         self.sync_percent_label.setText(f"{sync_pct:.1f}%")
         
         # Format block height with commas
