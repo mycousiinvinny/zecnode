@@ -4,6 +4,10 @@
 
 - Added: Live ZEC price display with 24h change (updates every 30 seconds)
 
+- Update ZecNode & Update Zebra in tray menu. Update Zebra **DOES ERASE BLOCKCHAIN DATA**. Update Zebra maybe 2 times a year, if that.
+
+- UI tweaks
+
 ## v1.0.2 - January 20th 2026
 
 - Fixed: Significant dashboard freeze when closing dashboard after 55% sync or if dashboard has stayed open for long periods of time. This occured if you didnt close dashboard after initial install. ~10 second freeze still happens. 
