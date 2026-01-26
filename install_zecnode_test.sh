@@ -3075,17 +3075,36 @@ class UpdateThread(QThread):
     
     def run(self):
         import subprocess
+        import os
         try:
             if self.update_type == "zecnode":
-                # Download and run install script
+                # Simple update - just download new main.py to zecnode folder
+                home = os.path.expanduser("~")
+                zecnode_dir = os.path.join(home, "zecnode")
+                
+                # Download new install script and extract main.py
                 result = subprocess.run(
-                    ["bash", "-c", "curl -sSL https://raw.githubusercontent.com/mycousiinvinny/zecnode/main/install_zecnode.sh -o /tmp/zecnode_update.sh && bash /tmp/zecnode_update.sh --update-only"],
+                    ["bash", "-c", f"""
+                        curl -sSL https://raw.githubusercontent.com/mycousiinvinny/zecnode/main/install_zecnode.sh -o /tmp/zecnode_update.sh
+                        # Extract just the Python code between the markers
+                        sed -n '/^cat > main.py << '\\''ENDOFFILE'\\''$/,/^ENDOFFILE$/p' /tmp/zecnode_update.sh | tail -n +2 | head -n -1 > {zecnode_dir}/main.py.new
+                        if [ -s {zecnode_dir}/main.py.new ]; then
+                            mv {zecnode_dir}/main.py.new {zecnode_dir}/main.py
+                            rm -f /tmp/zecnode_update.sh
+                            echo "SUCCESS"
+                        else
+                            rm -f {zecnode_dir}/main.py.new /tmp/zecnode_update.sh
+                            echo "FAILED: Could not extract main.py"
+                            exit 1
+                        fi
+                    """],
                     capture_output=True, text=True, timeout=120
                 )
-                if result.returncode == 0:
-                    self.finished.emit(True, "ZecNode updated! Restart to apply changes.")
+                if result.returncode == 0 and "SUCCESS" in result.stdout:
+                    self.finished.emit(True, "RESTART_ZECNODE")
                 else:
-                    self.finished.emit(False, f"Update failed: {result.stderr}")
+                    error = result.stderr or result.stdout or "Unknown error"
+                    self.finished.emit(False, f"Update failed: {error}")
             
             elif self.update_type == "zebra":
                 # Pull latest image
@@ -3856,13 +3875,19 @@ class DashboardWindow(QMainWindow):
             self.update_dialog.close()
         
         if success:
-            dialog = MessageDialog(self, "Update Complete", message, is_error=False)
-            dialog.exec_()
-            if "restart" in message.lower():
-                # Restart the app
+            if message == "RESTART_ZECNODE":
+                # Auto-restart ZecNode
                 import subprocess
-                subprocess.Popen(["python3", os.path.abspath(__file__)])
-                self._quit()
+                import sys
+                home = os.path.expanduser("~")
+                main_py = os.path.join(home, "zecnode", "main.py")
+                self.tray.hide()
+                QApplication.processEvents()
+                subprocess.Popen([sys.executable, main_py], cwd=os.path.join(home, "zecnode"))
+                os._exit(0)
+            else:
+                dialog = MessageDialog(self, "Update Complete", message, is_error=False)
+                dialog.exec_()
         else:
             dialog = MessageDialog(self, "Update Failed", message, is_error=True)
             dialog.exec_()
