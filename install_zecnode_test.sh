@@ -3266,6 +3266,7 @@ class DashboardWindow(QMainWindow):
     
     def _setup_ui(self):
         central = QWidget()
+        central.setStyleSheet("background: transparent;")
         self.setCentralWidget(central)
         
         # Main container with rounded corners
@@ -3290,33 +3291,33 @@ class DashboardWindow(QMainWindow):
         
         # Window controls in top right
         controls_bar = QHBoxLayout()
-        controls_bar.setContentsMargins(0, 0, 0, 5)
+        controls_bar.setContentsMargins(0, 0, 5, 0)
         controls_bar.addStretch()
         
         minimize_btn = QPushButton("–")
-        minimize_btn.setFixedSize(36, 28)
+        minimize_btn.setFixedSize(24, 24)
         minimize_btn.setStyleSheet("""
             QPushButton {
                 background-color: transparent;
                 border: none;
                 color: #555;
-                font-size: 22px;
+                font-size: 16px;
             }
-            QPushButton:hover { color: #fff; background-color: #333; border-radius: 5px; }
+            QPushButton:hover { color: #fff; background-color: #333; border-radius: 4px; }
         """)
         minimize_btn.clicked.connect(self.showMinimized)
         controls_bar.addWidget(minimize_btn)
         
         close_btn = QPushButton("✕")
-        close_btn.setFixedSize(36, 28)
+        close_btn.setFixedSize(24, 24)
         close_btn.setStyleSheet("""
             QPushButton {
                 background-color: transparent;
                 border: none;
                 color: #555;
-                font-size: 14px;
+                font-size: 12px;
             }
-            QPushButton:hover { color: #fff; background-color: #e81123; border-radius: 5px; }
+            QPushButton:hover { color: #fff; background-color: #c42b1c; border-radius: 4px; }
         """)
         close_btn.clicked.connect(self.close)
         controls_bar.addWidget(close_btn)
