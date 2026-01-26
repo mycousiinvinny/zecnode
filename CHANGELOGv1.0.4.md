@@ -1,12 +1,14 @@
-# Changelog v1.0.3
+# Changelog v1.0.4
+
+## v1.0.4 - January 25th 2026
+
+- Update ZecNode & Update Zebra in tray menu. Update Zebra **DOES ERASE BLOCKCHAIN DATA**. Update Zebra once a year or if recommended by Zcash Foundation
+
+- UI tweaks
 
 ## v1.0.3 - January 24th 2026
 
 - Added: Live ZEC price display with 24h change (updates every 30 seconds)
-
-- Update ZecNode & Update Zebra in tray menu. Update Zebra **DOES ERASE BLOCKCHAIN DATA**. Update Zebra maybe 2 times a year, if that.
-
-- UI tweaks
 
 ## v1.0.2 - January 20th 2026
 
