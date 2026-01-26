@@ -3289,35 +3289,34 @@ class DashboardWindow(QMainWindow):
         layout.setContentsMargins(25, 10, 10, 25)
         layout.setSpacing(0)
         
-        # Window controls in top right
+        # Window controls in top right - small circles
         controls_bar = QHBoxLayout()
-        controls_bar.setContentsMargins(0, 0, 5, 0)
+        controls_bar.setContentsMargins(0, 5, 15, 0)
         controls_bar.addStretch()
+        controls_bar.setSpacing(8)
         
-        minimize_btn = QPushButton("–")
-        minimize_btn.setFixedSize(24, 24)
+        minimize_btn = QPushButton()
+        minimize_btn.setFixedSize(12, 12)
         minimize_btn.setStyleSheet("""
             QPushButton {
-                background-color: transparent;
+                background-color: #3a3a3a;
                 border: none;
-                color: #555;
-                font-size: 16px;
+                border-radius: 6px;
             }
-            QPushButton:hover { color: #fff; background-color: #333; border-radius: 4px; }
+            QPushButton:hover { background-color: #febc2e; }
         """)
         minimize_btn.clicked.connect(self.showMinimized)
         controls_bar.addWidget(minimize_btn)
         
-        close_btn = QPushButton("✕")
-        close_btn.setFixedSize(24, 24)
+        close_btn = QPushButton()
+        close_btn.setFixedSize(12, 12)
         close_btn.setStyleSheet("""
             QPushButton {
-                background-color: transparent;
+                background-color: #3a3a3a;
                 border: none;
-                color: #555;
-                font-size: 12px;
+                border-radius: 6px;
             }
-            QPushButton:hover { color: #fff; background-color: #c42b1c; border-radius: 4px; }
+            QPushButton:hover { background-color: #ff5f57; }
         """)
         close_btn.clicked.connect(self.close)
         controls_bar.addWidget(close_btn)
