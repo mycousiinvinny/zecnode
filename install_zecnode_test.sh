@@ -2849,6 +2849,7 @@ class ConfirmDialog(QDialog):
         
         # Simple button row
         btn_widget = QWidget()
+        btn_widget.setStyleSheet("background: transparent;")
         btn_layout = QHBoxLayout(btn_widget)
         btn_layout.setContentsMargins(0, 0, 0, 0)
         btn_layout.setSpacing(20)
@@ -3742,12 +3743,13 @@ class DashboardWindow(QMainWindow):
         dialog.exec_()
     
     def _quit(self):
-        reply = QMessageBox.question(
-            self, "Quit",
-            "The node will keep running.\nQuit ZecNode?",
-            QMessageBox.Yes | QMessageBox.No
+        dialog = ConfirmDialog(
+            self,
+            "Quit ZecNode",
+            "The node will keep running in the background.\n\nQuit ZecNode?"
         )
-        if reply == QMessageBox.Yes:
+        dialog.yes_btn.setText("Quit")
+        if dialog.exec_() == QDialog.Accepted:
             self.tray.hide()
             QApplication.processEvents()
             import os
