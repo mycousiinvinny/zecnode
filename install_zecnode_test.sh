@@ -3174,10 +3174,11 @@ class StatCard(QFrame):
     
     def __init__(self, label: str, parent=None):
         super().__init__(parent)
+        self.setObjectName("statCard")
         self.setStyleSheet("""
-            StatCard {
+            #statCard {
                 background-color: #16161d;
-                border: 1px solid #222;
+                border: 1px solid #2a2a35;
                 border-radius: 10px;
             }
         """)
@@ -3188,11 +3189,11 @@ class StatCard(QFrame):
         
         self.value_label = QLabel("--")
         self.value_label.setFont(QFont("Segoe UI", 18, QFont.Bold))
-        self.value_label.setStyleSheet("color: #fff; background: transparent;")
+        self.value_label.setStyleSheet("color: #fff; background: transparent; border: none;")
         layout.addWidget(self.value_label)
         
         title = QLabel(label)
-        title.setStyleSheet("color: #666; font-size: 11px; background: transparent;")
+        title.setStyleSheet("color: #666; font-size: 11px; background: transparent; border: none;")
         layout.addWidget(title)
     
     def set_value(self, val: str):
@@ -3269,8 +3270,9 @@ class DashboardWindow(QMainWindow):
         
         # Main container with rounded corners
         self.container = QFrame(central)
+        self.container.setObjectName("mainContainer")
         self.container.setStyleSheet("""
-            QFrame {
+            #mainContainer {
                 background-color: #0f0f14;
                 border: 1px solid #333;
                 border-radius: 15px;
@@ -3283,68 +3285,58 @@ class DashboardWindow(QMainWindow):
         container_layout.addWidget(self.container)
         
         layout = QVBoxLayout(self.container)
-        layout.setContentsMargins(25, 15, 25, 25)
+        layout.setContentsMargins(25, 10, 10, 25)
         layout.setSpacing(0)
         
-        # Custom title bar with window controls
-        title_bar = QHBoxLayout()
-        title_bar.setContentsMargins(0, 0, 0, 10)
+        # Window controls in top right
+        controls_bar = QHBoxLayout()
+        controls_bar.setContentsMargins(0, 0, 0, 5)
+        controls_bar.addStretch()
         
-        # Spacer to center title
-        title_bar.addStretch()
-        
-        window_title = QLabel("ZecNode")
-        window_title.setStyleSheet("color: #666; font-size: 12px; border: none; background: transparent;")
-        title_bar.addWidget(window_title)
-        
-        title_bar.addStretch()
-        
-        # Window controls
-        minimize_btn = QPushButton("−")
-        minimize_btn.setFixedSize(30, 30)
+        minimize_btn = QPushButton("–")
+        minimize_btn.setFixedSize(36, 28)
         minimize_btn.setStyleSheet("""
             QPushButton {
                 background-color: transparent;
                 border: none;
-                color: #666;
-                font-size: 20px;
-                font-weight: bold;
+                color: #555;
+                font-size: 22px;
             }
-            QPushButton:hover { color: #fff; }
+            QPushButton:hover { color: #fff; background-color: #333; border-radius: 5px; }
         """)
         minimize_btn.clicked.connect(self.showMinimized)
-        title_bar.addWidget(minimize_btn)
+        controls_bar.addWidget(minimize_btn)
         
         close_btn = QPushButton("✕")
-        close_btn.setFixedSize(30, 30)
+        close_btn.setFixedSize(36, 28)
         close_btn.setStyleSheet("""
             QPushButton {
                 background-color: transparent;
                 border: none;
-                color: #666;
-                font-size: 16px;
-                font-weight: bold;
+                color: #555;
+                font-size: 14px;
             }
-            QPushButton:hover { color: #ff5555; }
+            QPushButton:hover { color: #fff; background-color: #e81123; border-radius: 5px; }
         """)
         close_btn.clicked.connect(self.close)
-        title_bar.addWidget(close_btn)
+        controls_bar.addWidget(close_btn)
         
-        layout.addLayout(title_bar)
+        layout.addLayout(controls_bar)
         
         # Header
         header = QHBoxLayout()
+        header.setContentsMargins(15, 0, 15, 0)
         
         title_section = QVBoxLayout()
         title_section.setSpacing(0)
         
         title = QLabel("ZecNode")
         title.setFont(QFont("Segoe UI", 20, QFont.Bold))
-        title.setStyleSheet("color: #f4b728;")
+        title.setStyleSheet("color: #f4b728; border: none; background: transparent;")
         title_section.addWidget(title)
         
         version_label = QLabel(f"v{VERSION}")
-        version_label.setStyleSheet("color: #555; font-size: 10px;")
+        version_label.setStyleSheet("color: #555; font-size: 10px; border: none; background: transparent;")
         title_section.addWidget(version_label)
         
         header.addLayout(title_section)
@@ -3407,10 +3399,11 @@ class DashboardWindow(QMainWindow):
         
         # Sync Progress Bar
         sync_container = QWidget()
+        sync_container.setObjectName("syncContainer")
         sync_container.setStyleSheet("""
-            QWidget {
+            #syncContainer {
                 background-color: #1e1e28;
-                border: 1px solid #333;
+                border: 1px solid #2a2a35;
                 border-radius: 12px;
             }
         """)
