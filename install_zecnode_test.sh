@@ -3345,38 +3345,38 @@ class DashboardWindow(QMainWindow):
         layout.setContentsMargins(25, 10, 10, 25)
         layout.setSpacing(0)
         
-        # Window controls in top right - small circles
+        # Window controls in top right
         controls_bar = QHBoxLayout()
-        controls_bar.setContentsMargins(0, 8, 18, 0)
+        controls_bar.setContentsMargins(0, 0, 10, 0)
         controls_bar.addStretch()
-        controls_bar.setSpacing(10)
+        controls_bar.setSpacing(5)
         
-        minimize_btn = QPushButton()
-        minimize_btn.setFixedSize(14, 14)
+        minimize_btn = QPushButton("−")
+        minimize_btn.setFixedSize(20, 20)
         minimize_btn.setStyleSheet("""
             QPushButton {
-                background-color: #3a3a3a;
+                background-color: transparent;
                 border: none;
-                border-radius: 7px;
-                max-width: 14px;
-                max-height: 14px;
+                color: #666;
+                font-size: 18px;
+                padding-bottom: 4px;
             }
-            QPushButton:hover { background-color: #febc2e; }
+            QPushButton:hover { color: #fff; }
         """)
         minimize_btn.clicked.connect(self.showMinimized)
         controls_bar.addWidget(minimize_btn)
         
-        close_btn = QPushButton()
-        close_btn.setFixedSize(14, 14)
+        close_btn = QPushButton("×")
+        close_btn.setFixedSize(20, 20)
         close_btn.setStyleSheet("""
             QPushButton {
-                background-color: #3a3a3a;
+                background-color: transparent;
                 border: none;
-                border-radius: 7px;
-                max-width: 14px;
-                max-height: 14px;
+                color: #666;
+                font-size: 18px;
+                padding-bottom: 2px;
             }
-            QPushButton:hover { background-color: #ff5f57; }
+            QPushButton:hover { color: #ff5555; }
         """)
         close_btn.clicked.connect(self.close)
         controls_bar.addWidget(close_btn)
@@ -3420,6 +3420,15 @@ class DashboardWindow(QMainWindow):
         
         header.addStretch()
         
+        self.status_dot = StatusDot()
+        header.addWidget(self.status_dot)
+        
+        header.addSpacing(8)
+        
+        self.status_text = QLabel("Checking...")
+        self.status_text.setStyleSheet("color: #888; border: none; background: transparent;")
+        header.addWidget(self.status_text)
+        
         layout.addLayout(header)
         layout.addSpacing(30)
         
@@ -3430,7 +3439,7 @@ class DashboardWindow(QMainWindow):
         self.peers_card = StatCard("Peers")
         stats_row1.addWidget(self.peers_card)
         
-        self.uptime_card = StatusUptimeCard()
+        self.uptime_card = StatCard("Uptime")
         stats_row1.addWidget(self.uptime_card)
         
         layout.addLayout(stats_row1)
@@ -3701,19 +3710,25 @@ class DashboardWindow(QMainWindow):
         # Status - check internet first, then running state
         if status.running and not has_internet:
             # Node is running but no internet
-            self.uptime_card.set_status(StatusDot.STATE_NO_INTERNET, "No Internet")
+            self.status_dot.set_state(StatusDot.STATE_NO_INTERNET)
+            self.status_text.setText("No Internet")
+            self.status_text.setStyleSheet("color: #f4b728; border: none; background: transparent;")
             self._update_tray_icon("no_internet")
             # Freeze all stats when offline - show dashes
             self.peers_card.set_value("--")
-            self.uptime_card.set_value("--")
+            self.uptime_card.set_value("--:--:--")
             return
         elif status.running:
             # Node is running with internet
-            self.uptime_card.set_status(StatusDot.STATE_RUNNING, "Running")
+            self.status_dot.set_state(StatusDot.STATE_RUNNING)
+            self.status_text.setText("Running")
+            self.status_text.setStyleSheet("color: #4ade80; border: none; background: transparent;")
             self._update_tray_icon("running")
         else:
             # Node is stopped
-            self.uptime_card.set_status(StatusDot.STATE_STOPPED, "Stopped")
+            self.status_dot.set_state(StatusDot.STATE_STOPPED)
+            self.status_text.setText("Stopped")
+            self.status_text.setStyleSheet("color: #ef4444; border: none; background: transparent;")
             self._update_tray_icon("stopped")
         
         # Stats (only updated when online)
