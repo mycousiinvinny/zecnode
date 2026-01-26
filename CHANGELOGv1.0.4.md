@@ -2,9 +2,9 @@
 
 ## v1.0.4 - January 25th 2026
 
-- Update ZecNode & Update Zebra in tray menu. Update Zebra **DOES ERASE BLOCKCHAIN DATA**. Update Zebra once a year or if recommended by Zcash Foundation
+- Added: Update ZecNode & Update Zebra in tray menu. Update Zebra **DOES ERASE BLOCKCHAIN DATA**. Update Zebra once a year or if recommended by Zcash Foundation
 
-- UI tweaks
+- Added: UI tweaks
 
 ## v1.0.3 - January 24th 2026
 
