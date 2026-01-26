@@ -3342,50 +3342,12 @@ class DashboardWindow(QMainWindow):
         container_layout.addWidget(self.container)
         
         layout = QVBoxLayout(self.container)
-        layout.setContentsMargins(25, 10, 10, 25)
+        layout.setContentsMargins(25, 20, 25, 25)
         layout.setSpacing(0)
-        
-        # Window controls in top right
-        controls_bar = QHBoxLayout()
-        controls_bar.setContentsMargins(0, 0, 10, 0)
-        controls_bar.addStretch()
-        controls_bar.setSpacing(5)
-        
-        minimize_btn = QPushButton("−")
-        minimize_btn.setFixedSize(20, 20)
-        minimize_btn.setStyleSheet("""
-            QPushButton {
-                background-color: transparent;
-                border: none;
-                color: #666;
-                font-size: 18px;
-                padding-bottom: 4px;
-            }
-            QPushButton:hover { color: #fff; }
-        """)
-        minimize_btn.clicked.connect(self.showMinimized)
-        controls_bar.addWidget(minimize_btn)
-        
-        close_btn = QPushButton("×")
-        close_btn.setFixedSize(20, 20)
-        close_btn.setStyleSheet("""
-            QPushButton {
-                background-color: transparent;
-                border: none;
-                color: #666;
-                font-size: 18px;
-                padding-bottom: 2px;
-            }
-            QPushButton:hover { color: #ff5555; }
-        """)
-        close_btn.clicked.connect(self.close)
-        controls_bar.addWidget(close_btn)
-        
-        layout.addLayout(controls_bar)
         
         # Header
         header = QHBoxLayout()
-        header.setContentsMargins(15, 0, 15, 0)
+        header.setContentsMargins(0, 0, 0, 0)
         
         title_section = QVBoxLayout()
         title_section.setSpacing(0)
@@ -3641,6 +3603,10 @@ class DashboardWindow(QMainWindow):
         
         menu.addSeparator()
         
+        close_dashboard = QAction("Close Dashboard", self)
+        close_dashboard.triggered.connect(self.hide)
+        menu.addAction(close_dashboard)
+        
         quit_action = QAction("Quit", self)
         quit_action.triggered.connect(self._quit)
         menu.addAction(quit_action)
@@ -3655,6 +3621,13 @@ class DashboardWindow(QMainWindow):
         self.showNormal()  # Restore if minimized
         self.raise_()  # Bring to front
         self.activateWindow()  # Give focus
+    
+    def _toggle_dashboard(self):
+        """Toggle dashboard visibility"""
+        if self.isVisible() and not self.isMinimized():
+            self.hide()
+        else:
+            self._show_dashboard()
     
     def _update_tray_icon(self, state: str):
         """Update tray icon - state can be 'running', 'stopped', or 'no_internet'"""
@@ -3679,8 +3652,8 @@ class DashboardWindow(QMainWindow):
         self.tray.setToolTip(tooltip)
     
     def _tray_click(self, reason):
-        if reason == QSystemTrayIcon.DoubleClick:
-            self._show_dashboard()
+        if reason == QSystemTrayIcon.Trigger:  # Single click
+            self._toggle_dashboard()
     
     def _start_refresh(self):
         """Start a background refresh - doesn't block UI"""
