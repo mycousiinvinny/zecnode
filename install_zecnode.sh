@@ -337,7 +337,7 @@ import json
 from pathlib import Path
 from typing import Optional
 
-VERSION = "1.0.3"
+VERSION = "1.0.4"
 
 
 class Config:
@@ -1545,7 +1545,7 @@ gsettings set org.gnome.desktop.session idle-delay 0 2>/dev/null || true
             logs = result.stdout + result.stderr
             
             # Find ALL matches and take the LAST one (most recent)
-            sync_matches = re.findall(r'nc_percent=([0-9.]+)%?', logs)
+            sync_matches = re.findall(r'sync_percent=([0-9.]+)%?', logs)
             if sync_matches:
                 status.sync_percent = float(sync_matches[-1])
             
@@ -2575,6 +2575,7 @@ Professional status display and node controls
 
 import socket
 import json
+import os
 import urllib.request
 from PyQt5.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel,
@@ -2810,6 +2811,340 @@ class StatusDot(QWidget):
         painter.setBrush(color)
         painter.setPen(Qt.NoPen)
         painter.drawEllipse(1, 1, 10, 10)
+
+
+class ConfirmDialog(QDialog):
+    """Custom styled confirmation dialog matching ZecNode theme"""
+    
+    def __init__(self, parent, title, message):
+        super().__init__(parent)
+        self.setWindowTitle(title)
+        self.setModal(True)
+        self.setMinimumSize(450, 280)
+        self.setStyleSheet("""
+            QDialog {
+                background-color: #1a1a24;
+            }
+        """)
+        
+        layout = QVBoxLayout(self)
+        layout.setSpacing(15)
+        layout.setContentsMargins(40, 30, 40, 30)
+        
+        # Title
+        title_label = QLabel(title)
+        title_label.setFont(QFont("Segoe UI", 14, QFont.Bold))
+        title_label.setStyleSheet("color: #f4b728;")
+        title_label.setAlignment(Qt.AlignCenter)
+        layout.addWidget(title_label)
+        
+        # Message
+        msg_label = QLabel(message)
+        msg_label.setStyleSheet("color: #e8e8e8;")
+        msg_label.setAlignment(Qt.AlignCenter)
+        msg_label.setWordWrap(True)
+        layout.addWidget(msg_label)
+        
+        layout.addStretch()
+        
+        # Simple button row
+        btn_widget = QWidget()
+        btn_widget.setStyleSheet("background: transparent;")
+        btn_layout = QHBoxLayout(btn_widget)
+        btn_layout.setContentsMargins(0, 0, 0, 0)
+        btn_layout.setSpacing(20)
+        
+        self.no_btn = QPushButton("Cancel")
+        self.no_btn.setMinimumHeight(50)
+        self.no_btn.setMinimumWidth(140)
+        self.no_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #2a2a3a;
+                border: 1px solid #444;
+                color: #e8e8e8;
+                border-radius: 25px;
+                font-size: 14px;
+                font-weight: bold;
+            }
+            QPushButton:hover { background-color: #3a3a4a; }
+        """)
+        self.no_btn.clicked.connect(self.reject)
+        btn_layout.addWidget(self.no_btn)
+        
+        self.yes_btn = QPushButton("Update")
+        self.yes_btn.setMinimumHeight(50)
+        self.yes_btn.setMinimumWidth(140)
+        self.yes_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #f4b728;
+                border: none;
+                color: #0f0f14;
+                border-radius: 25px;
+                font-size: 14px;
+                font-weight: bold;
+            }
+            QPushButton:hover { background-color: #f5c040; }
+        """)
+        self.yes_btn.clicked.connect(self.accept)
+        btn_layout.addWidget(self.yes_btn)
+        
+        layout.addWidget(btn_widget, alignment=Qt.AlignCenter)
+        layout.addSpacing(20)
+    
+    def accept(self):
+        self.result = True
+        super().accept()
+
+
+class MessageDialog(QDialog):
+    """Custom styled message dialog matching ZecNode theme"""
+    
+    def __init__(self, parent, title, message, is_error=False):
+        super().__init__(parent)
+        self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
+        self.setModal(True)
+        self.setFixedSize(300, 150)
+        self.setAttribute(Qt.WA_TranslucentBackground)
+        
+        # Main container with rounded corners
+        container = QFrame(self)
+        container.setGeometry(0, 0, 300, 150)
+        container.setStyleSheet("""
+            QFrame {
+                background-color: #1a1a24;
+                border: 1px solid #333;
+                border-radius: 15px;
+            }
+        """)
+        
+        layout = QVBoxLayout(container)
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(15)
+        
+        # Title
+        title_label = QLabel(title)
+        title_label.setFont(QFont("Segoe UI", 14, QFont.Bold))
+        color = "#ef4444" if is_error else "#4ade80"
+        title_label.setStyleSheet(f"color: {color}; border: none; background: transparent;")
+        title_label.setAlignment(Qt.AlignCenter)
+        layout.addWidget(title_label)
+        
+        # Message
+        msg_label = QLabel(message)
+        msg_label.setStyleSheet("color: #e8e8e8; font-size: 12px; border: none; background: transparent;")
+        msg_label.setAlignment(Qt.AlignCenter)
+        msg_label.setWordWrap(True)
+        layout.addWidget(msg_label)
+        
+        layout.addStretch()
+        
+        # OK Button
+        ok_btn = QPushButton("OK")
+        ok_btn.setFixedSize(80, 36)
+        ok_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #f4b728;
+                border: none;
+                border-radius: 18px;
+                color: #0f0f14;
+                font-size: 13px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #f5c040;
+            }
+        """)
+        ok_btn.clicked.connect(self.accept)
+        
+        btn_layout = QHBoxLayout()
+        btn_layout.addStretch()
+        btn_layout.addWidget(ok_btn)
+        btn_layout.addStretch()
+        layout.addLayout(btn_layout)
+
+
+class UpdateDialog(QDialog):
+    """Loading dialog with pulsing Zcash logo"""
+    
+    def __init__(self, parent, message="Updating..."):
+        super().__init__(parent)
+        self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
+        self.setModal(True)
+        self.setFixedSize(250, 180)
+        self.setAttribute(Qt.WA_TranslucentBackground)
+        
+        # Main container with rounded corners
+        container = QFrame(self)
+        container.setGeometry(0, 0, 250, 180)
+        container.setStyleSheet("""
+            QFrame {
+                background-color: #1a1a24;
+                border: 1px solid #333;
+                border-radius: 15px;
+            }
+        """)
+        
+        layout = QVBoxLayout(container)
+        layout.setAlignment(Qt.AlignCenter)
+        layout.setSpacing(20)
+        layout.setContentsMargins(20, 25, 20, 25)
+        
+        # Zcash logo (will pulse)
+        self.logo_label = QLabel()
+        self.logo_label.setAlignment(Qt.AlignCenter)
+        self.logo_label.setStyleSheet("border: none; background: transparent;")
+        self._opacity = 1.0
+        self._fading_out = True
+        
+        # Load the Zcash icon
+        icon_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "zecnode-icon.png")
+        if os.path.exists(icon_path):
+            pixmap = QPixmap(icon_path).scaled(64, 64, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            self.logo_label.setPixmap(pixmap)
+        else:
+            self.logo_label.setText("Ⓩ")
+            self.logo_label.setStyleSheet("font-size: 48px; color: #f4b728; border: none; background: transparent;")
+        
+        layout.addWidget(self.logo_label)
+        
+        # Message
+        self.message_label = QLabel(message)
+        self.message_label.setAlignment(Qt.AlignCenter)
+        self.message_label.setStyleSheet("color: #e8e8e8; font-size: 14px; border: none; background: transparent;")
+        layout.addWidget(self.message_label)
+        
+        # Pulse animation timer
+        self.pulse_timer = QTimer()
+        self.pulse_timer.timeout.connect(self._pulse)
+        self.pulse_timer.start(50)
+    
+    def _pulse(self):
+        if self._fading_out:
+            self._opacity -= 0.03
+            if self._opacity <= 0.3:
+                self._fading_out = False
+        else:
+            self._opacity += 0.03
+            if self._opacity >= 1.0:
+                self._fading_out = True
+        
+        # Use setGraphicsEffect for actual opacity
+        from PyQt5.QtWidgets import QGraphicsOpacityEffect
+        effect = QGraphicsOpacityEffect()
+        effect.setOpacity(self._opacity)
+        self.logo_label.setGraphicsEffect(effect)
+    
+    def set_message(self, message):
+        self.message_label.setText(message)
+    
+    def closeEvent(self, event):
+        self.pulse_timer.stop()
+        super().closeEvent(event)
+
+
+class UpdateThread(QThread):
+    """Background thread for updates"""
+    finished = pyqtSignal(bool, str)  # success, message
+    
+    def __init__(self, update_type, data_path=None):
+        super().__init__()
+        self.update_type = update_type
+        self.data_path = data_path
+    
+    def run(self):
+        import subprocess
+        try:
+            if self.update_type == "zecnode":
+                # Download and run install script
+                result = subprocess.run(
+                    ["bash", "-c", "curl -sSL https://raw.githubusercontent.com/mycousiinvinny/zecnode/main/install_zecnode.sh -o /tmp/zecnode_update.sh && bash /tmp/zecnode_update.sh --update-only"],
+                    capture_output=True, text=True, timeout=120
+                )
+                if result.returncode == 0:
+                    self.finished.emit(True, "ZecNode updated! Restart to apply changes.")
+                else:
+                    self.finished.emit(False, f"Update failed: {result.stderr}")
+            
+            elif self.update_type == "zebra":
+                # Pull latest image
+                result = subprocess.run(
+                    ["docker", "pull", "zfnd/zebra:latest"],
+                    capture_output=True, text=True, timeout=300
+                )
+                if result.returncode != 0:
+                    self.finished.emit(False, "Failed to pull Zebra image")
+                    return
+                
+                # Get ALL mount info from existing container BEFORE removing it
+                volume_mounts = []
+                port_mappings = ["8233:8233"]  # Default port
+                
+                try:
+                    # Get volume mounts using JSON format for reliable parsing
+                    mount_result = subprocess.run(
+                        ["docker", "inspect", "--format", "{{json .Mounts}}", "zebra"],
+                        capture_output=True, text=True, timeout=10
+                    )
+                    if mount_result.returncode == 0 and mount_result.stdout.strip():
+                        import json
+                        mounts = json.loads(mount_result.stdout.strip())
+                        for mount in mounts:
+                            source = mount.get('Source', '')
+                            dest = mount.get('Destination', '')
+                            if source and dest:
+                                volume_mounts.append(f"{source}:{dest}")
+                except:
+                    pass
+                
+                # Fallback if we couldn't get mounts
+                if not volume_mounts:
+                    data_path = self.data_path or "/mnt/zcash"
+                    volume_mounts = [
+                        f"{data_path}/zebra-cache:/var/cache/zebrad-cache",
+                        f"{data_path}/zebra-state:/var/lib/zebrad"
+                    ]
+                
+                # Check if container is running
+                running = subprocess.run(
+                    ["docker", "ps", "-q", "-f", "name=zebra"],
+                    capture_output=True, text=True
+                )
+                was_running = bool(running.stdout.strip())
+                
+                # Stop container if running
+                if was_running:
+                    subprocess.run(["docker", "stop", "zebra"], capture_output=True, timeout=30)
+                
+                # Remove old container
+                subprocess.run(["docker", "rm", "zebra"], capture_output=True, timeout=10)
+                
+                # Build docker run command with same mounts
+                docker_cmd = [
+                    "docker", "run", "-d",
+                    "--name", "zebra",
+                    "--restart", "unless-stopped",
+                ]
+                
+                # Add all volume mounts
+                for mount in volume_mounts:
+                    docker_cmd.extend(["-v", mount])
+                
+                # Add port mapping
+                docker_cmd.extend(["-p", "8233:8233"])
+                
+                docker_cmd.append("zfnd/zebra:latest")
+                
+                result = subprocess.run(docker_cmd, capture_output=True, text=True, timeout=30)
+                
+                if result.returncode == 0:
+                    self.finished.emit(True, "Zebra updated successfully!")
+                else:
+                    self.finished.emit(False, f"Failed to start Zebra: {result.stderr}")
+        
+        except subprocess.TimeoutExpired:
+            self.finished.emit(False, "Update timed out")
+        except Exception as e:
+            self.finished.emit(False, f"Error: {str(e)}")
 
 
 class StatCard(QFrame):
@@ -3129,12 +3464,6 @@ class DashboardWindow(QMainWindow):
         
         menu = QMenu()
         
-        show_action = QAction("Show Dashboard", self)
-        show_action.triggered.connect(self._show_dashboard)
-        menu.addAction(show_action)
-        
-        menu.addSeparator()
-        
         self.tray_stop = QAction("Stop Node", self)
         self.tray_stop.triggered.connect(self._stop)
         menu.addAction(self.tray_stop)
@@ -3143,6 +3472,16 @@ class DashboardWindow(QMainWindow):
         self.tray_start.triggered.connect(self._start)
         self.tray_start.setVisible(False)
         menu.addAction(self.tray_start)
+        
+        menu.addSeparator()
+        
+        update_zecnode = QAction("Update ZecNode", self)
+        update_zecnode.triggered.connect(self._update_zecnode)
+        menu.addAction(update_zecnode)
+        
+        self.tray_update_zebra = QAction("Update Zebra", self)
+        self.tray_update_zebra.triggered.connect(self._update_zebra)
+        menu.addAction(self.tray_update_zebra)
         
         menu.addSeparator()
         
@@ -3246,7 +3585,9 @@ class DashboardWindow(QMainWindow):
         
         # Sync progress
         sync_pct = min(status.sync_percent, 100.0)
-        self.sync_progress.setValue(int(sync_pct))
+        # Show at least 1% on the bar if there's any progress
+        bar_value = int(sync_pct) if sync_pct >= 1.0 else (1 if sync_pct > 0 else 0)
+        self.sync_progress.setValue(bar_value)
         self.sync_percent_label.setText(f"{sync_pct:.1f}%")
         
         # Format block height with commas
@@ -3266,6 +3607,7 @@ class DashboardWindow(QMainWindow):
         
         self.tray_stop.setVisible(status.running)
         self.tray_start.setVisible(not status.running)
+        self.tray_update_zebra.setEnabled(not status.running)
     
     def _stop(self):
         self._action_in_progress = True
@@ -3344,17 +3686,72 @@ class DashboardWindow(QMainWindow):
             self.change_label.setText("--%")
             self.change_label.setStyleSheet("color: #888; font-size: 11px;")
     
+    def _update_zecnode(self):
+        """Update ZecNode from GitHub"""
+        dialog = ConfirmDialog(
+            self, 
+            "Update ZecNode",
+            "Download and install the latest version?\n\nThe app will restart after updating."
+        )
+        if dialog.exec_() != QDialog.Accepted:
+            return
+        
+        self.update_dialog = UpdateDialog(self, "Updating ZecNode...")
+        self.update_dialog.show()
+        
+        self.update_thread = UpdateThread("zecnode")
+        self.update_thread.finished.connect(self._on_update_done)
+        self.update_thread.start()
+    
+    def _update_zebra(self):
+        """Update Zebra to latest version"""
+        dialog = ConfirmDialog(
+            self,
+            "Update Zebra", 
+            "Download and install the latest version?\n\nWarning: Major updates may require a full resync of the blockchain."
+        )
+        if dialog.exec_() != QDialog.Accepted:
+            return
+        
+        self.update_dialog = UpdateDialog(self, "Updating Zebra...")
+        self.update_dialog.show()
+        
+        data_path = self.config.get_data_path() if hasattr(self.config, 'get_data_path') else "/mnt/zcash"
+        self.update_thread = UpdateThread("zebra", data_path)
+        self.update_thread.finished.connect(self._on_update_done)
+        self.update_thread.start()
+    
+    def _on_update_done(self, success, message):
+        """Handle update completion"""
+        if hasattr(self, 'update_dialog'):
+            self.update_dialog.close()
+        
+        if success:
+            dialog = MessageDialog(self, "Update Complete", message, is_error=False)
+            dialog.exec_()
+            if "restart" in message.lower():
+                # Restart the app
+                import subprocess
+                subprocess.Popen(["python3", os.path.abspath(__file__)])
+                self._quit()
+        else:
+            dialog = MessageDialog(self, "Update Failed", message, is_error=True)
+            dialog.exec_()
+        
+        self._start_refresh()
+    
     def _show_logs(self):
         dialog = LogsDialog(self, self.node_manager)
         dialog.exec_()
     
     def _quit(self):
-        reply = QMessageBox.question(
-            self, "Quit",
-            "The node will keep running.\nQuit ZecNode?",
-            QMessageBox.Yes | QMessageBox.No
+        dialog = ConfirmDialog(
+            self,
+            "Quit ZecNode",
+            "The node will keep running in the background.\n\nQuit ZecNode?"
         )
-        if reply == QMessageBox.Yes:
+        dialog.yes_btn.setText("Quit")
+        if dialog.exec_() == QDialog.Accepted:
             self.tray.hide()
             QApplication.processEvents()
             import os
