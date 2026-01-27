@@ -3641,6 +3641,9 @@ class DashboardWindow(QMainWindow):
         else:
             self._show_dashboard()
             self.tray_toggle_dashboard.setText("Hide Dashboard")
+            # Refresh data immediately when showing
+            self._start_refresh()
+            self._fetch_price()
     
     def _show_dashboard(self):
         """Show and bring dashboard to front"""
