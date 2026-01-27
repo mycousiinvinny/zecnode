@@ -3326,14 +3326,11 @@ class DashboardWindow(QMainWindow):
         self._drag_pos = None
     
     def showEvent(self, event):
-        """Center window when it's shown and refresh data"""
+        """Center window when it's shown"""
         super().showEvent(event)
         if not self._centered:
             self._center_window()
             self._centered = True
-        # Refresh data when window becomes visible
-        self._start_refresh()
-        self._fetch_price()
     
     def _center_window(self):
         screen = self.screen().availableGeometry()
@@ -3653,7 +3650,6 @@ class DashboardWindow(QMainWindow):
         self.show()
         self.showNormal()  # Restore if minimized
         self.raise_()  # Bring to front
-        self.activateWindow()  # Give focus
     
     def _update_tray_icon(self, state: str):
         """Update tray icon - state can be 'running', 'stopped', or 'no_internet'"""
