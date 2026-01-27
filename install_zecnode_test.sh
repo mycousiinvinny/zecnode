@@ -337,7 +337,7 @@ import json
 from pathlib import Path
 from typing import Optional
 
-VERSION = "1.0.4"
+VERSION = "1.0.5"
 
 
 class Config:
@@ -3622,17 +3622,25 @@ class DashboardWindow(QMainWindow):
         
         menu.addSeparator()
         
-        close_dashboard = QAction("Close Dashboard", self)
-        close_dashboard.triggered.connect(self.hide)
-        menu.addAction(close_dashboard)
+        self.tray_toggle_dashboard = QAction("Hide Dashboard", self)
+        self.tray_toggle_dashboard.triggered.connect(self._toggle_dashboard_from_menu)
+        menu.addAction(self.tray_toggle_dashboard)
         
         quit_action = QAction("Quit", self)
         quit_action.triggered.connect(self._quit)
         menu.addAction(quit_action)
         
         self.tray.setContextMenu(menu)
-        self.tray.activated.connect(self._tray_click)
         self.tray.show()
+    
+    def _toggle_dashboard_from_menu(self):
+        """Toggle dashboard and update menu text"""
+        if self.isVisible() and not self.isMinimized():
+            self.hide()
+            self.tray_toggle_dashboard.setText("Show Dashboard")
+        else:
+            self._show_dashboard()
+            self.tray_toggle_dashboard.setText("Hide Dashboard")
     
     def _show_dashboard(self):
         """Show and bring dashboard to front"""
@@ -3640,13 +3648,6 @@ class DashboardWindow(QMainWindow):
         self.showNormal()  # Restore if minimized
         self.raise_()  # Bring to front
         self.activateWindow()  # Give focus
-    
-    def _toggle_dashboard(self):
-        """Toggle dashboard visibility"""
-        if self.isVisible() and not self.isMinimized():
-            self.hide()
-        else:
-            self._show_dashboard()
     
     def _update_tray_icon(self, state: str):
         """Update tray icon - state can be 'running', 'stopped', or 'no_internet'"""
@@ -3669,10 +3670,6 @@ class DashboardWindow(QMainWindow):
         painter.end()
         self.tray.setIcon(QIcon(pm))
         self.tray.setToolTip(tooltip)
-    
-    def _tray_click(self, reason):
-        if reason == QSystemTrayIcon.Trigger:  # Single click
-            self._toggle_dashboard()
     
     def _start_refresh(self):
         """Start a background refresh - doesn't block UI"""
