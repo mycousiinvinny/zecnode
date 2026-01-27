@@ -337,7 +337,7 @@ import json
 from pathlib import Path
 from typing import Optional
 
-VERSION = "1.0.4"
+VERSION = "1.0.5"
 
 
 class Config:
@@ -2818,40 +2818,60 @@ class ConfirmDialog(QDialog):
     
     def __init__(self, parent, title, message):
         super().__init__(parent)
-        self.setWindowTitle(title)
+        self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
         self.setModal(True)
-        self.setMinimumSize(450, 280)
-        self.setStyleSheet("""
-            QDialog {
+        self.setFixedSize(450, 280)
+        self.setAttribute(Qt.WA_TranslucentBackground)
+        
+        # Main container
+        container = QFrame(self)
+        container.setGeometry(0, 0, 450, 280)
+        container.setStyleSheet("""
+            QFrame {
                 background-color: #1a1a24;
+                border: 1px solid #333;
+                border-radius: 15px;
             }
         """)
         
-        layout = QVBoxLayout(self)
-        layout.setSpacing(15)
-        layout.setContentsMargins(40, 30, 40, 30)
+        # Close button (X) in top right
+        close_btn = QPushButton("✕", container)
+        close_btn.setGeometry(405, 10, 30, 30)
+        close_btn.setStyleSheet("""
+            QPushButton {
+                background-color: transparent;
+                border: none;
+                color: #666;
+                font-size: 18px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                color: #fff;
+            }
+        """)
+        close_btn.clicked.connect(self.reject)
         
         # Title
-        title_label = QLabel(title)
+        title_label = QLabel(title, container)
+        title_label.setGeometry(0, 30, 450, 30)
         title_label.setFont(QFont("Segoe UI", 14, QFont.Bold))
-        title_label.setStyleSheet("color: #f4b728;")
+        title_label.setStyleSheet("color: #f4b728; border: none; background: transparent;")
         title_label.setAlignment(Qt.AlignCenter)
-        layout.addWidget(title_label)
         
         # Message
-        msg_label = QLabel(message)
-        msg_label.setStyleSheet("color: #e8e8e8;")
+        msg_label = QLabel(message, container)
+        msg_label.setGeometry(40, 70, 370, 80)
+        msg_label.setStyleSheet("color: #e8e8e8; font-size: 12px; border: none; background: transparent;")
         msg_label.setAlignment(Qt.AlignCenter)
         msg_label.setWordWrap(True)
-        layout.addWidget(msg_label)
         
-        layout.addStretch()
+        # Buttons container
+        btn_widget = QWidget(container)
+        btn_widget.setGeometry(0, 180, 450, 70)
+        btn_widget.setStyleSheet("background: transparent; border: none;")
         
-        # Simple button row
-        btn_widget = QWidget()
-        btn_widget.setStyleSheet("background: transparent;")
         btn_layout = QHBoxLayout(btn_widget)
-        btn_layout.setContentsMargins(0, 0, 0, 0)
+        btn_layout.setContentsMargins(60, 0, 60, 0)
         btn_layout.setSpacing(20)
         
         self.no_btn = QPushButton("Cancel")
@@ -2887,9 +2907,6 @@ class ConfirmDialog(QDialog):
         """)
         self.yes_btn.clicked.connect(self.accept)
         btn_layout.addWidget(self.yes_btn)
-        
-        layout.addWidget(btn_widget, alignment=Qt.AlignCenter)
-        layout.addSpacing(20)
     
     def accept(self):
         self.result = True
@@ -2903,12 +2920,12 @@ class MessageDialog(QDialog):
         super().__init__(parent)
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
         self.setModal(True)
-        self.setFixedSize(300, 150)
+        self.setFixedSize(320, 180)
         self.setAttribute(Qt.WA_TranslucentBackground)
         
         # Main container with rounded corners
         container = QFrame(self)
-        container.setGeometry(0, 0, 300, 150)
+        container.setGeometry(0, 0, 320, 180)
         container.setStyleSheet("""
             QFrame {
                 background-color: #1a1a24;
@@ -2917,35 +2934,46 @@ class MessageDialog(QDialog):
             }
         """)
         
-        layout = QVBoxLayout(container)
-        layout.setContentsMargins(20, 20, 20, 20)
-        layout.setSpacing(15)
+        # Close button (X) in top right
+        close_btn = QPushButton("✕", container)
+        close_btn.setGeometry(275, 10, 30, 30)
+        close_btn.setStyleSheet("""
+            QPushButton {
+                background-color: transparent;
+                border: none;
+                color: #666;
+                font-size: 18px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                color: #fff;
+            }
+        """)
+        close_btn.clicked.connect(self.accept)
         
         # Title
-        title_label = QLabel(title)
+        title_label = QLabel(title, container)
+        title_label.setGeometry(0, 30, 320, 30)
         title_label.setFont(QFont("Segoe UI", 14, QFont.Bold))
         color = "#ef4444" if is_error else "#4ade80"
         title_label.setStyleSheet(f"color: {color}; border: none; background: transparent;")
         title_label.setAlignment(Qt.AlignCenter)
-        layout.addWidget(title_label)
         
         # Message
-        msg_label = QLabel(message)
+        msg_label = QLabel(message, container)
+        msg_label.setGeometry(20, 65, 280, 50)
         msg_label.setStyleSheet("color: #e8e8e8; font-size: 12px; border: none; background: transparent;")
         msg_label.setAlignment(Qt.AlignCenter)
         msg_label.setWordWrap(True)
-        layout.addWidget(msg_label)
-        
-        layout.addStretch()
         
         # OK Button
-        ok_btn = QPushButton("OK")
-        ok_btn.setFixedSize(80, 36)
+        ok_btn = QPushButton("OK", container)
+        ok_btn.setGeometry(120, 125, 80, 40)
         ok_btn.setStyleSheet("""
             QPushButton {
                 background-color: #f4b728;
                 border: none;
-                border-radius: 18px;
+                border-radius: 20px;
                 color: #0f0f14;
                 font-size: 13px;
                 font-weight: bold;
@@ -2955,12 +2983,6 @@ class MessageDialog(QDialog):
             }
         """)
         ok_btn.clicked.connect(self.accept)
-        
-        btn_layout = QHBoxLayout()
-        btn_layout.addStretch()
-        btn_layout.addWidget(ok_btn)
-        btn_layout.addStretch()
-        layout.addLayout(btn_layout)
 
 
 class UpdateDialog(QDialog):
@@ -3053,17 +3075,36 @@ class UpdateThread(QThread):
     
     def run(self):
         import subprocess
+        import os
         try:
             if self.update_type == "zecnode":
-                # Download and run install script
+                # Simple update - just download new main.py to zecnode folder
+                home = os.path.expanduser("~")
+                zecnode_dir = os.path.join(home, "zecnode")
+                
+                # Download new install script and extract main.py
                 result = subprocess.run(
-                    ["bash", "-c", "curl -sSL https://raw.githubusercontent.com/mycousiinvinny/zecnode/main/install_zecnode.sh -o /tmp/zecnode_update.sh && bash /tmp/zecnode_update.sh --update-only"],
+                    ["bash", "-c", f"""
+                        curl -sSL https://raw.githubusercontent.com/mycousiinvinny/zecnode/main/install_zecnode.sh -o /tmp/zecnode_update.sh
+                        # Extract just the Python code between the markers
+                        sed -n '/^cat > main.py << '\\''ENDOFFILE'\\''$/,/^ENDOFFILE$/p' /tmp/zecnode_update.sh | tail -n +2 | head -n -1 > {zecnode_dir}/main.py.new
+                        if [ -s {zecnode_dir}/main.py.new ]; then
+                            mv {zecnode_dir}/main.py.new {zecnode_dir}/main.py
+                            rm -f /tmp/zecnode_update.sh
+                            echo "SUCCESS"
+                        else
+                            rm -f {zecnode_dir}/main.py.new /tmp/zecnode_update.sh
+                            echo "FAILED: Could not extract main.py"
+                            exit 1
+                        fi
+                    """],
                     capture_output=True, text=True, timeout=120
                 )
-                if result.returncode == 0:
-                    self.finished.emit(True, "ZecNode updated! Restart to apply changes.")
+                if result.returncode == 0 and "SUCCESS" in result.stdout:
+                    self.finished.emit(True, "RESTART_ZECNODE")
                 else:
-                    self.finished.emit(False, f"Update failed: {result.stderr}")
+                    error = result.stderr or result.stdout or "Unknown error"
+                    self.finished.emit(False, f"Update failed: {error}")
             
             elif self.update_type == "zebra":
                 # Pull latest image
@@ -3152,10 +3193,11 @@ class StatCard(QFrame):
     
     def __init__(self, label: str, parent=None):
         super().__init__(parent)
+        self.setObjectName("statCard")
         self.setStyleSheet("""
-            StatCard {
+            #statCard {
                 background-color: #16161d;
-                border: 1px solid #222;
+                border: 1px solid #2a2a35;
                 border-radius: 10px;
             }
         """)
@@ -3166,15 +3208,71 @@ class StatCard(QFrame):
         
         self.value_label = QLabel("--")
         self.value_label.setFont(QFont("Segoe UI", 18, QFont.Bold))
-        self.value_label.setStyleSheet("color: #fff; background: transparent;")
+        self.value_label.setStyleSheet("color: #fff; background: transparent; border: none;")
         layout.addWidget(self.value_label)
         
         title = QLabel(label)
-        title.setStyleSheet("color: #666; font-size: 11px; background: transparent;")
+        title.setStyleSheet("color: #666; font-size: 11px; background: transparent; border: none;")
         layout.addWidget(title)
     
     def set_value(self, val: str):
         self.value_label.setText(val)
+
+
+class StatusUptimeCard(QFrame):
+    """Uptime card with integrated status indicator"""
+    
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setObjectName("statusUptimeCard")
+        self.setStyleSheet("""
+            #statusUptimeCard {
+                background-color: #16161d;
+                border: 1px solid #2a2a35;
+                border-radius: 10px;
+            }
+        """)
+        
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(15, 12, 15, 12)
+        layout.setSpacing(4)
+        
+        # Top row with uptime value
+        self.value_label = QLabel("--")
+        self.value_label.setFont(QFont("Segoe UI", 18, QFont.Bold))
+        self.value_label.setStyleSheet("color: #fff; background: transparent; border: none;")
+        layout.addWidget(self.value_label)
+        
+        # Bottom row with status dot and text
+        status_row = QHBoxLayout()
+        status_row.setSpacing(6)
+        status_row.setContentsMargins(0, 0, 0, 0)
+        
+        self.status_dot = StatusDot()
+        status_row.addWidget(self.status_dot)
+        
+        self.status_text = QLabel("Checking...")
+        self.status_text.setStyleSheet("color: #666; font-size: 11px; background: transparent; border: none;")
+        status_row.addWidget(self.status_text)
+        
+        status_row.addStretch()
+        layout.addLayout(status_row)
+    
+    def set_value(self, val: str):
+        self.value_label.setText(val)
+    
+    def set_status(self, state: int, text: str):
+        self.status_dot.set_state(state)
+        self.status_text.setText(text)
+        # Update text color based on state
+        if state == StatusDot.STATE_RUNNING:
+            self.status_text.setStyleSheet("color: #4ade80; font-size: 11px; background: transparent; border: none;")
+        elif state == StatusDot.STATE_STOPPED:
+            self.status_text.setStyleSheet("color: #f87171; font-size: 11px; background: transparent; border: none;")
+        elif state == StatusDot.STATE_NO_INTERNET:
+            self.status_text.setStyleSheet("color: #f4b728; font-size: 11px; background: transparent; border: none;")
+        else:
+            self.status_text.setStyleSheet("color: #666; font-size: 11px; background: transparent; border: none;")
 
 
 class DashboardWindow(QMainWindow):
@@ -3185,9 +3283,12 @@ class DashboardWindow(QMainWindow):
         self.config = config
         self.node_manager = NodeManager(config.get_data_path())
         self._centered = False
+        self._drag_pos = None
         
         self.setWindowTitle("ZecNode")
-        self.setMinimumSize(600, 550)  # Larger base size for 4K
+        self.setWindowFlags(Qt.FramelessWindowHint)
+        self.setAttribute(Qt.WA_TranslucentBackground)
+        self.setMinimumSize(600, 550)
         self.resize(600, 550)
         
         self._setup_ui()
@@ -3195,7 +3296,7 @@ class DashboardWindow(QMainWindow):
         
         self.timer = QTimer()
         self.timer.timeout.connect(self._start_refresh)
-        self.timer.start(1000)  # 1 second for real-time updates
+        self.timer.start(1000)
         self._action_in_progress = False
         self._closing = False
         self.refresh_thread = None
@@ -3205,8 +3306,24 @@ class DashboardWindow(QMainWindow):
         self.price_thread = None
         self.price_timer = QTimer()
         self.price_timer.timeout.connect(self._fetch_price)
-        self.price_timer.start(30000)  # 30 seconds
-        self._fetch_price()  # Initial fetch
+        self.price_timer.start(30000)
+        self._fetch_price()
+    
+    def mousePressEvent(self, event):
+        """Enable dragging the window"""
+        if event.button() == Qt.LeftButton and event.pos().y() < 50:
+            self._drag_pos = event.globalPos() - self.frameGeometry().topLeft()
+            event.accept()
+    
+    def mouseMoveEvent(self, event):
+        """Handle window dragging"""
+        if self._drag_pos and event.buttons() == Qt.LeftButton:
+            self.move(event.globalPos() - self._drag_pos)
+            event.accept()
+    
+    def mouseReleaseEvent(self, event):
+        """Stop dragging"""
+        self._drag_pos = None
     
     def showEvent(self, event):
         """Center window when it's shown"""
@@ -3224,24 +3341,43 @@ class DashboardWindow(QMainWindow):
     
     def _setup_ui(self):
         central = QWidget()
+        central.setStyleSheet("background: transparent;")
         self.setCentralWidget(central)
-        layout = QVBoxLayout(central)
-        layout.setContentsMargins(25, 25, 25, 25)
+        
+        # Main container with rounded corners
+        self.container = QFrame(central)
+        self.container.setObjectName("mainContainer")
+        self.container.setStyleSheet("""
+            #mainContainer {
+                background-color: #0f0f14;
+                border: 1px solid #333;
+                border-radius: 15px;
+            }
+        """)
+        
+        # Layout for container
+        container_layout = QVBoxLayout(central)
+        container_layout.setContentsMargins(0, 0, 0, 0)
+        container_layout.addWidget(self.container)
+        
+        layout = QVBoxLayout(self.container)
+        layout.setContentsMargins(25, 20, 25, 25)
         layout.setSpacing(0)
         
         # Header
         header = QHBoxLayout()
+        header.setContentsMargins(0, 0, 0, 0)
         
         title_section = QVBoxLayout()
         title_section.setSpacing(0)
         
         title = QLabel("ZecNode")
         title.setFont(QFont("Segoe UI", 20, QFont.Bold))
-        title.setStyleSheet("color: #f4b728;")
+        title.setStyleSheet("color: #f4b728; border: none; background: transparent;")
         title_section.addWidget(title)
         
         version_label = QLabel(f"v{VERSION}")
-        version_label.setStyleSheet("color: #555; font-size: 10px;")
+        version_label.setStyleSheet("color: #555; font-size: 10px; border: none; background: transparent;")
         title_section.addWidget(version_label)
         
         header.addLayout(title_section)
@@ -3271,7 +3407,7 @@ class DashboardWindow(QMainWindow):
         header.addSpacing(8)
         
         self.status_text = QLabel("Checking...")
-        self.status_text.setStyleSheet("color: #888;")
+        self.status_text.setStyleSheet("color: #888; border: none; background: transparent;")
         header.addWidget(self.status_text)
         
         layout.addLayout(header)
@@ -3304,10 +3440,11 @@ class DashboardWindow(QMainWindow):
         
         # Sync Progress Bar
         sync_container = QWidget()
+        sync_container.setObjectName("syncContainer")
         sync_container.setStyleSheet("""
-            QWidget {
+            #syncContainer {
                 background-color: #1e1e28;
-                border: 1px solid #333;
+                border: 1px solid #2a2a35;
                 border-radius: 12px;
             }
         """)
@@ -3485,6 +3622,10 @@ class DashboardWindow(QMainWindow):
         
         menu.addSeparator()
         
+        close_dashboard = QAction("Close Dashboard", self)
+        close_dashboard.triggered.connect(self.hide)
+        menu.addAction(close_dashboard)
+        
         quit_action = QAction("Quit", self)
         quit_action.triggered.connect(self._quit)
         menu.addAction(quit_action)
@@ -3499,6 +3640,13 @@ class DashboardWindow(QMainWindow):
         self.showNormal()  # Restore if minimized
         self.raise_()  # Bring to front
         self.activateWindow()  # Give focus
+    
+    def _toggle_dashboard(self):
+        """Toggle dashboard visibility"""
+        if self.isVisible() and not self.isMinimized():
+            self.hide()
+        else:
+            self._show_dashboard()
     
     def _update_tray_icon(self, state: str):
         """Update tray icon - state can be 'running', 'stopped', or 'no_internet'"""
@@ -3523,8 +3671,8 @@ class DashboardWindow(QMainWindow):
         self.tray.setToolTip(tooltip)
     
     def _tray_click(self, reason):
-        if reason == QSystemTrayIcon.DoubleClick:
-            self._show_dashboard()
+        if reason == QSystemTrayIcon.Trigger:  # Single click
+            self._toggle_dashboard()
     
     def _start_refresh(self):
         """Start a background refresh - doesn't block UI"""
@@ -3556,7 +3704,7 @@ class DashboardWindow(QMainWindow):
             # Node is running but no internet
             self.status_dot.set_state(StatusDot.STATE_NO_INTERNET)
             self.status_text.setText("No Internet")
-            self.status_text.setStyleSheet("color: #f4b728;")  # Yellow
+            self.status_text.setStyleSheet("color: #f4b728; border: none; background: transparent;")
             self._update_tray_icon("no_internet")
             # Freeze all stats when offline - show dashes
             self.peers_card.set_value("--")
@@ -3566,13 +3714,13 @@ class DashboardWindow(QMainWindow):
             # Node is running with internet
             self.status_dot.set_state(StatusDot.STATE_RUNNING)
             self.status_text.setText("Running")
-            self.status_text.setStyleSheet("color: #4ade80;")  # Green
+            self.status_text.setStyleSheet("color: #4ade80; border: none; background: transparent;")
             self._update_tray_icon("running")
         else:
             # Node is stopped
             self.status_dot.set_state(StatusDot.STATE_STOPPED)
             self.status_text.setText("Stopped")
-            self.status_text.setStyleSheet("color: #ef4444;")  # Red
+            self.status_text.setStyleSheet("color: #ef4444; border: none; background: transparent;")
             self._update_tray_icon("stopped")
         
         # Stats (only updated when online)
@@ -3727,13 +3875,19 @@ class DashboardWindow(QMainWindow):
             self.update_dialog.close()
         
         if success:
-            dialog = MessageDialog(self, "Update Complete", message, is_error=False)
-            dialog.exec_()
-            if "restart" in message.lower():
-                # Restart the app
+            if message == "RESTART_ZECNODE":
+                # Auto-restart ZecNode
                 import subprocess
-                subprocess.Popen(["python3", os.path.abspath(__file__)])
-                self._quit()
+                import sys
+                home = os.path.expanduser("~")
+                main_py = os.path.join(home, "zecnode", "main.py")
+                self.tray.hide()
+                QApplication.processEvents()
+                subprocess.Popen([sys.executable, main_py], cwd=os.path.join(home, "zecnode"))
+                os._exit(0)
+            else:
+                dialog = MessageDialog(self, "Update Complete", message, is_error=False)
+                dialog.exec_()
         else:
             dialog = MessageDialog(self, "Update Failed", message, is_error=True)
             dialog.exec_()
