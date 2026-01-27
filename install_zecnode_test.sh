@@ -3326,11 +3326,14 @@ class DashboardWindow(QMainWindow):
         self._drag_pos = None
     
     def showEvent(self, event):
-        """Center window when it's shown"""
+        """Center window when it's shown and refresh data"""
         super().showEvent(event)
         if not self._centered:
             self._center_window()
             self._centered = True
+        # Refresh data when window becomes visible
+        self._start_refresh()
+        self._fetch_price()
     
     def _center_window(self):
         screen = self.screen().availableGeometry()
