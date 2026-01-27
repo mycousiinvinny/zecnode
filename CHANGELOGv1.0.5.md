@@ -1,6 +1,6 @@
 # Changelog v1.0.5
 
-## v1.0.5 - January 27th
+## v1.0.5 - January 27th 2026
 
 - Added: Frameless window with rounded corners
   
