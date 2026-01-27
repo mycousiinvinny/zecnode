@@ -3,10 +3,15 @@
 ## v1.0.5 - January 27th
 
 - Added: Frameless window with rounded corners
+  
 - Added: Tray icon toggle (single click show/hide)
+  
 - Added: Close Dashboard in tray menu
+  
 - Added: Auto-update and restart (no sudo needed)
+  
 - Fixed: progress bar rounding
+  
 - Added: Styled dialogs
 
 ## v1.0.4 - January 25th 2026
