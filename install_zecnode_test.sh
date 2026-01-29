@@ -3390,11 +3390,11 @@ class DashboardWindow(QMainWindow):
         
         self.price_label = QLabel("$--")
         self.price_label.setFont(QFont("Segoe UI", 16, QFont.Bold))
-        self.price_label.setStyleSheet("color: #e8e8e8;")
+        self.price_label.setStyleSheet("color: #e8e8e8; border: none; background: transparent;")
         price_section.addWidget(self.price_label)
         
         self.change_label = QLabel("--%")
-        self.change_label.setStyleSheet("color: #888; font-size: 11px;")
+        self.change_label.setStyleSheet("color: #888; font-size: 11px; border: none; background: transparent;")
         price_section.addWidget(self.change_label)
         
         header.addLayout(price_section)
@@ -3818,20 +3818,17 @@ class DashboardWindow(QMainWindow):
         if self._closing:
             return
         
+        # Only update if we got valid data - keep old value on failure
         if price is not None:
             self.price_label.setText(f"${price:,.2f}")
             
             if change is not None:
                 if change >= 0:
                     self.change_label.setText(f"▲ {change:.2f}%")
-                    self.change_label.setStyleSheet("color: #4ade80; font-size: 11px;")
+                    self.change_label.setStyleSheet("color: #4ade80; font-size: 11px; border: none; background: transparent;")
                 else:
                     self.change_label.setText(f"▼ {abs(change):.2f}%")
-                    self.change_label.setStyleSheet("color: #ef4444; font-size: 11px;")
-        else:
-            self.price_label.setText("$--")
-            self.change_label.setText("--%")
-            self.change_label.setStyleSheet("color: #888; font-size: 11px;")
+                    self.change_label.setStyleSheet("color: #ef4444; font-size: 11px; border: none; background: transparent;")
     
     def _update_zecnode(self):
         """Update ZecNode from GitHub"""
