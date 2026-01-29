@@ -3635,21 +3635,20 @@ class DashboardWindow(QMainWindow):
     
     def _toggle_dashboard_from_menu(self):
         """Toggle dashboard and update menu text"""
-        if self.isVisible() and not self.isMinimized():
-            self.hide()
+        if self.isVisible():
+            self.setVisible(False)
             self.tray_toggle_dashboard.setText("Show Dashboard")
         else:
-            self._show_dashboard()
+            self.setVisible(True)
+            self.showNormal()
+            self.raise_()
             self.tray_toggle_dashboard.setText("Hide Dashboard")
-            # Refresh data immediately when showing
-            self._start_refresh()
-            self._fetch_price()
     
     def _show_dashboard(self):
         """Show and bring dashboard to front"""
-        self.show()
-        self.showNormal()  # Restore if minimized
-        self.raise_()  # Bring to front
+        self.setVisible(True)
+        self.showNormal()
+        self.raise_()
     
     def _update_tray_icon(self, state: str):
         """Update tray icon - state can be 'running', 'stopped', or 'no_internet'"""
@@ -3686,6 +3685,13 @@ class DashboardWindow(QMainWindow):
         # Don't start new refresh if one is already running
         if self.refresh_thread is not None and self.refresh_thread.isRunning():
             return
+        
+        # Clean up old thread
+        if self.refresh_thread is not None:
+            try:
+                self.refresh_thread.finished.disconnect()
+            except:
+                pass
         
         # Start background refresh
         self.refresh_thread = RefreshThread(self.node_manager)
@@ -3808,6 +3814,13 @@ class DashboardWindow(QMainWindow):
             return
         if self.price_thread is not None and self.price_thread.isRunning():
             return
+        
+        # Clean up old thread
+        if self.price_thread is not None:
+            try:
+                self.price_thread.finished.disconnect()
+            except:
+                pass
         
         self.price_thread = PriceThread()
         self.price_thread.finished.connect(self._on_price_done)
