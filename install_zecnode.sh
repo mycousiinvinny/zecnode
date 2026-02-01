@@ -1650,7 +1650,7 @@ Professional UI for installing the Zcash node
 from PyQt5.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QStackedWidget,
     QLabel, QPushButton, QComboBox, QProgressBar, QLineEdit,
-    QMessageBox, QSpacerItem, QSizePolicy, QApplication
+    QMessageBox, QSpacerItem, QSizePolicy, QApplication, QFrame
 )
 from PyQt5.QtCore import Qt, QThread, pyqtSignal, QTimer, QRectF
 from PyQt5.QtGui import QFont, QPainter, QColor, QBrush, QPainterPath
@@ -1873,14 +1873,33 @@ class InstallerWizard(QMainWindow):
         self.selected_drive: Optional[DriveInfo] = None
         self.worker = None
         self.drives = []
-        self._centered = False  # Track if we've centered yet
+        self._centered = False
+        self._drag_pos = None
         
         self.setWindowTitle("ZecNode")
-        self.setMinimumSize(700, 680)  # Larger base size for 4K
+        self.setWindowFlags(Qt.FramelessWindowHint)
+        self.setAttribute(Qt.WA_TranslucentBackground)
+        self.setMinimumSize(700, 680)
         self.resize(700, 680)
         
         self._setup_ui()
         self._check_resume()
+    
+    def mousePressEvent(self, event):
+        """Enable dragging the window"""
+        if event.button() == Qt.LeftButton and event.pos().y() < 50:
+            self._drag_pos = event.globalPos() - self.frameGeometry().topLeft()
+            event.accept()
+    
+    def mouseMoveEvent(self, event):
+        """Handle window dragging"""
+        if self._drag_pos and event.buttons() == Qt.LeftButton:
+            self.move(event.globalPos() - self._drag_pos)
+            event.accept()
+    
+    def mouseReleaseEvent(self, event):
+        """Stop dragging"""
+        self._drag_pos = None
     
     def showEvent(self, event):
         """Center window when it's shown"""
@@ -1921,12 +1940,53 @@ class InstallerWizard(QMainWindow):
     
     def _setup_ui(self):
         central = QWidget()
+        central.setStyleSheet("background: transparent;")
         self.setCentralWidget(central)
-        layout = QVBoxLayout(central)
-        layout.setContentsMargins(0, 0, 0, 0)
+        
+        # Main container with rounded corners
+        self.container = QFrame(central)
+        self.container.setObjectName("installerContainer")
+        self.container.setStyleSheet("""
+            #installerContainer {
+                background-color: #0f0f14;
+                border: 1px solid #333;
+                border-radius: 15px;
+            }
+        """)
+        
+        # Layout for container
+        container_layout = QVBoxLayout(central)
+        container_layout.setContentsMargins(0, 0, 0, 0)
+        container_layout.addWidget(self.container)
+        
+        main_layout = QVBoxLayout(self.container)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(0)
+        
+        # Close button in top right
+        close_bar = QHBoxLayout()
+        close_bar.setContentsMargins(0, 10, 15, 0)
+        close_bar.addStretch()
+        
+        close_btn = QPushButton("✕")
+        close_btn.setFixedSize(30, 30)
+        close_btn.setStyleSheet("""
+            QPushButton {
+                background-color: transparent;
+                border: none;
+                color: #666;
+                font-size: 16px;
+            }
+            QPushButton:hover { color: #ff5555; }
+        """)
+        close_btn.clicked.connect(self.close)
+        close_bar.addWidget(close_btn)
+        
+        main_layout.addLayout(close_bar)
         
         self.stack = QStackedWidget()
-        layout.addWidget(self.stack)
+        self.stack.setStyleSheet("background: transparent;")
+        main_layout.addWidget(self.stack)
         
         self.stack.addWidget(self._create_welcome())      # 0
         self.stack.addWidget(self._create_setup())        # 1
@@ -1939,8 +1999,9 @@ class InstallerWizard(QMainWindow):
     def _page(self):
         """Create standard page widget"""
         page = QWidget()
+        page.setStyleSheet("background: transparent;")
         layout = QVBoxLayout(page)
-        layout.setContentsMargins(50, 40, 50, 40)
+        layout.setContentsMargins(50, 20, 50, 40)
         layout.setSpacing(0)
         return page, layout
     
@@ -2008,12 +2069,27 @@ class InstallerWizard(QMainWindow):
         btn_row.addStretch()
         
         start_btn = QPushButton("Get Started")
-        start_btn.setFixedWidth(160)
+        start_btn.setFixedSize(180, 50)
+        start_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #f4b728;
+                border: none;
+                border-radius: 25px;
+                color: #0f0f14;
+                font-size: 15px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #f5c040;
+            }
+        """)
         start_btn.clicked.connect(self._start_setup)
         btn_row.addWidget(start_btn)
         
         btn_row.addStretch()
         layout.addLayout(btn_row)
+        
+        layout.addSpacing(30)
         
         return page
     
@@ -2097,8 +2173,18 @@ class InstallerWizard(QMainWindow):
         layout.addItem(self._spacer(15))
         
         self.refresh_btn = QPushButton("Refresh")
-        self.refresh_btn.setObjectName("secondary")
-        self.refresh_btn.setFixedWidth(100)
+        self.refresh_btn.setFixedSize(120, 44)
+        self.refresh_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #2a2a3a;
+                border: 1px solid #444;
+                border-radius: 22px;
+                color: #e8e8e8;
+                font-size: 13px;
+                font-weight: bold;
+            }
+            QPushButton:hover { background-color: #3a3a4a; }
+        """)
         self.refresh_btn.clicked.connect(self._refresh_drives)
         layout.addWidget(self.refresh_btn)
         
@@ -2118,12 +2204,26 @@ class InstallerWizard(QMainWindow):
         btn_row.addStretch()
         
         self.drive_next = QPushButton("Continue")
-        self.drive_next.setFixedWidth(140)
+        self.drive_next.setFixedSize(160, 50)
         self.drive_next.setEnabled(False)
+        self.drive_next.setStyleSheet("""
+            QPushButton {
+                background-color: #f4b728;
+                border: none;
+                border-radius: 25px;
+                color: #0f0f14;
+                font-size: 14px;
+                font-weight: bold;
+            }
+            QPushButton:hover { background-color: #f5c040; }
+            QPushButton:disabled { background-color: #555; color: #888; }
+        """)
         self.drive_next.clicked.connect(lambda: self._go_to_page(3))
         btn_row.addWidget(self.drive_next)
         
+        btn_row.addStretch()
         layout.addLayout(btn_row)
+        layout.addSpacing(30)
         return page
     
     # ==================== CONFIRM ====================
@@ -2170,21 +2270,43 @@ class InstallerWizard(QMainWindow):
         btn_row = QHBoxLayout()
         
         back_btn = QPushButton("Back")
-        back_btn.setObjectName("secondary")
-        back_btn.setFixedWidth(100)
+        back_btn.setFixedSize(120, 50)
+        back_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #2a2a3a;
+                border: 1px solid #444;
+                border-radius: 25px;
+                color: #e8e8e8;
+                font-size: 14px;
+                font-weight: bold;
+            }
+            QPushButton:hover { background-color: #3a3a4a; }
+        """)
         back_btn.clicked.connect(lambda: self._go_to_page(2))
         btn_row.addWidget(back_btn)
         
         btn_row.addStretch()
         
         self.confirm_btn = QPushButton("Install")
-        self.confirm_btn.setObjectName("danger")
-        self.confirm_btn.setFixedWidth(140)
+        self.confirm_btn.setFixedSize(160, 50)
         self.confirm_btn.setEnabled(False)
+        self.confirm_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #ef4444;
+                border: none;
+                border-radius: 25px;
+                color: #fff;
+                font-size: 14px;
+                font-weight: bold;
+            }
+            QPushButton:hover { background-color: #f87171; }
+            QPushButton:disabled { background-color: #555; color: #888; }
+        """)
         self.confirm_btn.clicked.connect(self._start_install)
         btn_row.addWidget(self.confirm_btn)
         
         layout.addLayout(btn_row)
+        layout.addSpacing(30)
         return page
     
     # ==================== INSTALL ====================
@@ -2279,18 +2401,43 @@ class InstallerWizard(QMainWindow):
         btn_row.addStretch()
         
         later_btn = QPushButton("Later")
-        later_btn.setObjectName("secondary")
-        later_btn.setFixedWidth(100)
+        later_btn.setFixedSize(120, 50)
+        later_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #2a2a3a;
+                border: 1px solid #444;
+                border-radius: 25px;
+                color: #e8e8e8;
+                font-size: 14px;
+                font-weight: bold;
+            }
+            QPushButton:hover { background-color: #3a3a4a; }
+        """)
         later_btn.clicked.connect(self.close)
         btn_row.addWidget(later_btn)
         
+        btn_row.addSpacing(15)
+        
         reboot_btn = QPushButton("Reboot Now")
-        reboot_btn.setFixedWidth(140)
+        reboot_btn.setFixedSize(160, 50)
+        reboot_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #f4b728;
+                border: none;
+                border-radius: 25px;
+                color: #0f0f14;
+                font-size: 14px;
+                font-weight: bold;
+            }
+            QPushButton:hover { background-color: #f5c040; }
+        """)
         reboot_btn.clicked.connect(self._reboot)
         btn_row.addWidget(reboot_btn)
         
         btn_row.addStretch()
         layout.addLayout(btn_row)
+        
+        layout.addSpacing(30)
         
         return page
     
@@ -2333,13 +2480,25 @@ class InstallerWizard(QMainWindow):
         btn_row.addStretch()
         
         dash_btn = QPushButton("Open Dashboard")
-        dash_btn.setFixedWidth(200)
-        dash_btn.setFixedHeight(55)
+        dash_btn.setFixedSize(200, 55)
+        dash_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #f4b728;
+                border: none;
+                border-radius: 27px;
+                color: #0f0f14;
+                font-size: 15px;
+                font-weight: bold;
+            }
+            QPushButton:hover { background-color: #f5c040; }
+        """)
         dash_btn.clicked.connect(self._open_dashboard)
         btn_row.addWidget(dash_btn)
         
         btn_row.addStretch()
         layout.addLayout(btn_row)
+        
+        layout.addSpacing(30)
         
         return page
     
@@ -3296,7 +3455,7 @@ class DashboardWindow(QMainWindow):
         
         self.timer = QTimer()
         self.timer.timeout.connect(self._start_refresh)
-        self.timer.start(1000)
+        self.timer.start(5000)  # 5 seconds - reduces thread buildup
         self._action_in_progress = False
         self._closing = False
         self.refresh_thread = None
@@ -3390,11 +3549,11 @@ class DashboardWindow(QMainWindow):
         
         self.price_label = QLabel("$--")
         self.price_label.setFont(QFont("Segoe UI", 16, QFont.Bold))
-        self.price_label.setStyleSheet("color: #e8e8e8;")
+        self.price_label.setStyleSheet("color: #e8e8e8; border: none; background: transparent;")
         price_section.addWidget(self.price_label)
         
         self.change_label = QLabel("--%")
-        self.change_label.setStyleSheet("color: #888; font-size: 11px;")
+        self.change_label.setStyleSheet("color: #888; font-size: 11px; border: none; background: transparent;")
         price_section.addWidget(self.change_label)
         
         header.addLayout(price_section)
@@ -3622,31 +3781,33 @@ class DashboardWindow(QMainWindow):
         
         menu.addSeparator()
         
-        close_dashboard = QAction("Close Dashboard", self)
-        close_dashboard.triggered.connect(self.hide)
-        menu.addAction(close_dashboard)
+        self.tray_toggle_dashboard = QAction("Hide Dashboard", self)
+        self.tray_toggle_dashboard.triggered.connect(self._toggle_dashboard_from_menu)
+        menu.addAction(self.tray_toggle_dashboard)
         
         quit_action = QAction("Quit", self)
         quit_action.triggered.connect(self._quit)
         menu.addAction(quit_action)
         
         self.tray.setContextMenu(menu)
-        self.tray.activated.connect(self._tray_click)
         self.tray.show()
+    
+    def _toggle_dashboard_from_menu(self):
+        """Toggle dashboard and update menu text"""
+        if self.isVisible():
+            self.setVisible(False)
+            self.tray_toggle_dashboard.setText("Show Dashboard")
+        else:
+            self.setVisible(True)
+            self.showNormal()
+            self.raise_()
+            self.tray_toggle_dashboard.setText("Hide Dashboard")
     
     def _show_dashboard(self):
         """Show and bring dashboard to front"""
-        self.show()
-        self.showNormal()  # Restore if minimized
-        self.raise_()  # Bring to front
-        self.activateWindow()  # Give focus
-    
-    def _toggle_dashboard(self):
-        """Toggle dashboard visibility"""
-        if self.isVisible() and not self.isMinimized():
-            self.hide()
-        else:
-            self._show_dashboard()
+        self.setVisible(True)
+        self.showNormal()
+        self.raise_()
     
     def _update_tray_icon(self, state: str):
         """Update tray icon - state can be 'running', 'stopped', or 'no_internet'"""
@@ -3670,14 +3831,14 @@ class DashboardWindow(QMainWindow):
         self.tray.setIcon(QIcon(pm))
         self.tray.setToolTip(tooltip)
     
-    def _tray_click(self, reason):
-        if reason == QSystemTrayIcon.Trigger:  # Single click
-            self._toggle_dashboard()
-    
     def _start_refresh(self):
         """Start a background refresh - doesn't block UI"""
         # Exit immediately if closing
         if self._closing:
+            return
+        
+        # Don't refresh if window is hidden - no point updating invisible UI
+        if not self.isVisible():
             return
         
         # Don't refresh while an action is in progress
@@ -3687,6 +3848,13 @@ class DashboardWindow(QMainWindow):
         # Don't start new refresh if one is already running
         if self.refresh_thread is not None and self.refresh_thread.isRunning():
             return
+        
+        # Clean up old thread
+        if self.refresh_thread is not None:
+            try:
+                self.refresh_thread.finished.disconnect()
+            except:
+                pass
         
         # Start background refresh
         self.refresh_thread = RefreshThread(self.node_manager)
@@ -3736,6 +3904,7 @@ class DashboardWindow(QMainWindow):
         # Show at least 1% on the bar if there's any progress
         bar_value = int(sync_pct) if sync_pct >= 1.0 else (1 if sync_pct > 0 else 0)
         self.sync_progress.setValue(bar_value)
+        self.sync_progress.repaint()
         self.sync_percent_label.setText(f"{sync_pct:.1f}%")
         
         # Format block height with commas
@@ -3756,6 +3925,10 @@ class DashboardWindow(QMainWindow):
         self.tray_stop.setVisible(status.running)
         self.tray_start.setVisible(not status.running)
         self.tray_update_zebra.setEnabled(not status.running)
+        
+        # Force UI to repaint
+        self.update()
+        QApplication.processEvents()
     
     def _stop(self):
         self._action_in_progress = True
@@ -3807,8 +3980,16 @@ class DashboardWindow(QMainWindow):
         """Start background price fetch"""
         if self._closing:
             return
+            
         if self.price_thread is not None and self.price_thread.isRunning():
             return
+        
+        # Clean up old thread
+        if self.price_thread is not None:
+            try:
+                self.price_thread.finished.disconnect()
+            except:
+                pass
         
         self.price_thread = PriceThread()
         self.price_thread.finished.connect(self._on_price_done)
@@ -3819,20 +4000,17 @@ class DashboardWindow(QMainWindow):
         if self._closing:
             return
         
+        # Only update if we got valid data - keep old value on failure
         if price is not None:
             self.price_label.setText(f"${price:,.2f}")
             
             if change is not None:
                 if change >= 0:
                     self.change_label.setText(f"▲ {change:.2f}%")
-                    self.change_label.setStyleSheet("color: #4ade80; font-size: 11px;")
+                    self.change_label.setStyleSheet("color: #4ade80; font-size: 11px; border: none; background: transparent;")
                 else:
                     self.change_label.setText(f"▼ {abs(change):.2f}%")
-                    self.change_label.setStyleSheet("color: #ef4444; font-size: 11px;")
-        else:
-            self.price_label.setText("$--")
-            self.change_label.setText("--%")
-            self.change_label.setStyleSheet("color: #888; font-size: 11px;")
+                    self.change_label.setStyleSheet("color: #ef4444; font-size: 11px; border: none; background: transparent;")
     
     def _update_zecnode(self):
         """Update ZecNode from GitHub"""
