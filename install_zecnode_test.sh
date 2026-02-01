@@ -2173,8 +2173,18 @@ class InstallerWizard(QMainWindow):
         layout.addItem(self._spacer(15))
         
         self.refresh_btn = QPushButton("Refresh")
-        self.refresh_btn.setObjectName("secondary")
-        self.refresh_btn.setFixedWidth(100)
+        self.refresh_btn.setFixedSize(120, 44)
+        self.refresh_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #2a2a3a;
+                border: 1px solid #444;
+                border-radius: 22px;
+                color: #e8e8e8;
+                font-size: 13px;
+                font-weight: bold;
+            }
+            QPushButton:hover { background-color: #3a3a4a; }
+        """)
         self.refresh_btn.clicked.connect(self._refresh_drives)
         layout.addWidget(self.refresh_btn)
         
@@ -2194,12 +2204,26 @@ class InstallerWizard(QMainWindow):
         btn_row.addStretch()
         
         self.drive_next = QPushButton("Continue")
-        self.drive_next.setFixedWidth(140)
+        self.drive_next.setFixedSize(160, 50)
         self.drive_next.setEnabled(False)
+        self.drive_next.setStyleSheet("""
+            QPushButton {
+                background-color: #f4b728;
+                border: none;
+                border-radius: 25px;
+                color: #0f0f14;
+                font-size: 14px;
+                font-weight: bold;
+            }
+            QPushButton:hover { background-color: #f5c040; }
+            QPushButton:disabled { background-color: #555; color: #888; }
+        """)
         self.drive_next.clicked.connect(lambda: self._go_to_page(3))
         btn_row.addWidget(self.drive_next)
         
+        btn_row.addStretch()
         layout.addLayout(btn_row)
+        layout.addSpacing(30)
         return page
     
     # ==================== CONFIRM ====================
@@ -2246,21 +2270,43 @@ class InstallerWizard(QMainWindow):
         btn_row = QHBoxLayout()
         
         back_btn = QPushButton("Back")
-        back_btn.setObjectName("secondary")
-        back_btn.setFixedWidth(100)
+        back_btn.setFixedSize(120, 50)
+        back_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #2a2a3a;
+                border: 1px solid #444;
+                border-radius: 25px;
+                color: #e8e8e8;
+                font-size: 14px;
+                font-weight: bold;
+            }
+            QPushButton:hover { background-color: #3a3a4a; }
+        """)
         back_btn.clicked.connect(lambda: self._go_to_page(2))
         btn_row.addWidget(back_btn)
         
         btn_row.addStretch()
         
         self.confirm_btn = QPushButton("Install")
-        self.confirm_btn.setObjectName("danger")
-        self.confirm_btn.setFixedWidth(140)
+        self.confirm_btn.setFixedSize(160, 50)
         self.confirm_btn.setEnabled(False)
+        self.confirm_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #ef4444;
+                border: none;
+                border-radius: 25px;
+                color: #fff;
+                font-size: 14px;
+                font-weight: bold;
+            }
+            QPushButton:hover { background-color: #f87171; }
+            QPushButton:disabled { background-color: #555; color: #888; }
+        """)
         self.confirm_btn.clicked.connect(self._start_install)
         btn_row.addWidget(self.confirm_btn)
         
         layout.addLayout(btn_row)
+        layout.addSpacing(30)
         return page
     
     # ==================== INSTALL ====================
@@ -2355,18 +2401,43 @@ class InstallerWizard(QMainWindow):
         btn_row.addStretch()
         
         later_btn = QPushButton("Later")
-        later_btn.setObjectName("secondary")
-        later_btn.setFixedWidth(100)
+        later_btn.setFixedSize(120, 50)
+        later_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #2a2a3a;
+                border: 1px solid #444;
+                border-radius: 25px;
+                color: #e8e8e8;
+                font-size: 14px;
+                font-weight: bold;
+            }
+            QPushButton:hover { background-color: #3a3a4a; }
+        """)
         later_btn.clicked.connect(self.close)
         btn_row.addWidget(later_btn)
         
+        btn_row.addSpacing(15)
+        
         reboot_btn = QPushButton("Reboot Now")
-        reboot_btn.setFixedWidth(140)
+        reboot_btn.setFixedSize(160, 50)
+        reboot_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #f4b728;
+                border: none;
+                border-radius: 25px;
+                color: #0f0f14;
+                font-size: 14px;
+                font-weight: bold;
+            }
+            QPushButton:hover { background-color: #f5c040; }
+        """)
         reboot_btn.clicked.connect(self._reboot)
         btn_row.addWidget(reboot_btn)
         
         btn_row.addStretch()
         layout.addLayout(btn_row)
+        
+        layout.addSpacing(30)
         
         return page
     
@@ -2409,13 +2480,25 @@ class InstallerWizard(QMainWindow):
         btn_row.addStretch()
         
         dash_btn = QPushButton("Open Dashboard")
-        dash_btn.setFixedWidth(200)
-        dash_btn.setFixedHeight(55)
+        dash_btn.setFixedSize(200, 55)
+        dash_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #f4b728;
+                border: none;
+                border-radius: 27px;
+                color: #0f0f14;
+                font-size: 15px;
+                font-weight: bold;
+            }
+            QPushButton:hover { background-color: #f5c040; }
+        """)
         dash_btn.clicked.connect(self._open_dashboard)
         btn_row.addWidget(dash_btn)
         
         btn_row.addStretch()
         layout.addLayout(btn_row)
+        
+        layout.addSpacing(30)
         
         return page
     
