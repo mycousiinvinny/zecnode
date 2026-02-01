@@ -1985,6 +1985,7 @@ class InstallerWizard(QMainWindow):
         main_layout.addLayout(close_bar)
         
         self.stack = QStackedWidget()
+        self.stack.setStyleSheet("background: transparent;")
         main_layout.addWidget(self.stack)
         
         self.stack.addWidget(self._create_welcome())      # 0
@@ -1998,8 +1999,9 @@ class InstallerWizard(QMainWindow):
     def _page(self):
         """Create standard page widget"""
         page = QWidget()
+        page.setStyleSheet("background: transparent;")
         layout = QVBoxLayout(page)
-        layout.setContentsMargins(50, 40, 50, 40)
+        layout.setContentsMargins(50, 20, 50, 40)
         layout.setSpacing(0)
         return page, layout
     
