@@ -2,9 +2,9 @@
 
 ## v1.0.5 - February 1st 2026
 
-- Fixed: Changed refresh from 1 second to every 5 seconds. This reduces thread creation by 80%. (I think the freeze issue is fixed. After dashboard was open for long periods of time, it would freeze after closing. Testing potential fixes.)
+- Fixed: Changed refresh from 1 second to every 5 seconds. This reduces thread creation by 80%. (I think the freeze issue is fixed. After dashboard was open for long periods of time, it would freeze after closing. Testing potential fixes. Not a memory leak.)
 
-- Added: Updated installer & dashboard UI
+- Updated: installer & dashboard UI
   
 - Added: Tray icon toggle (single click show/hide)
   
@@ -12,7 +12,7 @@
   
 - Added: Auto-update and restart (no sudo needed)
   
-- Fixed: progress bar rounding. Now it updates properly.
+- Fixed: sync progress bar rounding. Now it updates properly.
 
 ## v1.0.4 - January 25th 2026
 
