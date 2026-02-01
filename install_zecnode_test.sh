@@ -1650,7 +1650,7 @@ Professional UI for installing the Zcash node
 from PyQt5.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QStackedWidget,
     QLabel, QPushButton, QComboBox, QProgressBar, QLineEdit,
-    QMessageBox, QSpacerItem, QSizePolicy, QApplication
+    QMessageBox, QSpacerItem, QSizePolicy, QApplication, QFrame
 )
 from PyQt5.QtCore import Qt, QThread, pyqtSignal, QTimer, QRectF
 from PyQt5.QtGui import QFont, QPainter, QColor, QBrush, QPainterPath
