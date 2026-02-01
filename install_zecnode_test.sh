@@ -3765,6 +3765,9 @@ class DashboardWindow(QMainWindow):
         self.tray_stop.setVisible(status.running)
         self.tray_start.setVisible(not status.running)
         self.tray_update_zebra.setEnabled(not status.running)
+        
+        # Force UI to repaint
+        QApplication.processEvents()
     
     def _stop(self):
         self._action_in_progress = True
