@@ -2067,12 +2067,27 @@ class InstallerWizard(QMainWindow):
         btn_row.addStretch()
         
         start_btn = QPushButton("Get Started")
-        start_btn.setFixedWidth(160)
+        start_btn.setFixedSize(180, 50)
+        start_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #f4b728;
+                border: none;
+                border-radius: 25px;
+                color: #0f0f14;
+                font-size: 15px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #f5c040;
+            }
+        """)
         start_btn.clicked.connect(self._start_setup)
         btn_row.addWidget(start_btn)
         
         btn_row.addStretch()
         layout.addLayout(btn_row)
+        
+        layout.addSpacing(30)
         
         return page
     
