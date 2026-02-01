@@ -3296,7 +3296,7 @@ class DashboardWindow(QMainWindow):
         
         self.timer = QTimer()
         self.timer.timeout.connect(self._start_refresh)
-        self.timer.start(1000)
+        self.timer.start(5000)  # 5 seconds - reduces thread buildup
         self._action_in_progress = False
         self._closing = False
         self.refresh_thread = None
@@ -3678,6 +3678,10 @@ class DashboardWindow(QMainWindow):
         if self._closing:
             return
         
+        # Don't refresh if window is hidden - no point updating invisible UI
+        if not self.isVisible():
+            return
+        
         # Don't refresh while an action is in progress
         if self._action_in_progress:
             return
@@ -3812,6 +3816,7 @@ class DashboardWindow(QMainWindow):
         """Start background price fetch"""
         if self._closing:
             return
+            
         if self.price_thread is not None and self.price_thread.isRunning():
             return
         
