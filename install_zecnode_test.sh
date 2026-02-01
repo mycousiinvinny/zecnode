@@ -1873,14 +1873,33 @@ class InstallerWizard(QMainWindow):
         self.selected_drive: Optional[DriveInfo] = None
         self.worker = None
         self.drives = []
-        self._centered = False  # Track if we've centered yet
+        self._centered = False
+        self._drag_pos = None
         
         self.setWindowTitle("ZecNode")
-        self.setMinimumSize(700, 680)  # Larger base size for 4K
+        self.setWindowFlags(Qt.FramelessWindowHint)
+        self.setAttribute(Qt.WA_TranslucentBackground)
+        self.setMinimumSize(700, 680)
         self.resize(700, 680)
         
         self._setup_ui()
         self._check_resume()
+    
+    def mousePressEvent(self, event):
+        """Enable dragging the window"""
+        if event.button() == Qt.LeftButton and event.pos().y() < 50:
+            self._drag_pos = event.globalPos() - self.frameGeometry().topLeft()
+            event.accept()
+    
+    def mouseMoveEvent(self, event):
+        """Handle window dragging"""
+        if self._drag_pos and event.buttons() == Qt.LeftButton:
+            self.move(event.globalPos() - self._drag_pos)
+            event.accept()
+    
+    def mouseReleaseEvent(self, event):
+        """Stop dragging"""
+        self._drag_pos = None
     
     def showEvent(self, event):
         """Center window when it's shown"""
@@ -1921,12 +1940,52 @@ class InstallerWizard(QMainWindow):
     
     def _setup_ui(self):
         central = QWidget()
+        central.setStyleSheet("background: transparent;")
         self.setCentralWidget(central)
-        layout = QVBoxLayout(central)
-        layout.setContentsMargins(0, 0, 0, 0)
+        
+        # Main container with rounded corners
+        self.container = QFrame(central)
+        self.container.setObjectName("installerContainer")
+        self.container.setStyleSheet("""
+            #installerContainer {
+                background-color: #0f0f14;
+                border: 1px solid #333;
+                border-radius: 15px;
+            }
+        """)
+        
+        # Layout for container
+        container_layout = QVBoxLayout(central)
+        container_layout.setContentsMargins(0, 0, 0, 0)
+        container_layout.addWidget(self.container)
+        
+        main_layout = QVBoxLayout(self.container)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(0)
+        
+        # Close button in top right
+        close_bar = QHBoxLayout()
+        close_bar.setContentsMargins(0, 10, 15, 0)
+        close_bar.addStretch()
+        
+        close_btn = QPushButton("✕")
+        close_btn.setFixedSize(30, 30)
+        close_btn.setStyleSheet("""
+            QPushButton {
+                background-color: transparent;
+                border: none;
+                color: #666;
+                font-size: 16px;
+            }
+            QPushButton:hover { color: #ff5555; }
+        """)
+        close_btn.clicked.connect(self.close)
+        close_bar.addWidget(close_btn)
+        
+        main_layout.addLayout(close_bar)
         
         self.stack = QStackedWidget()
-        layout.addWidget(self.stack)
+        main_layout.addWidget(self.stack)
         
         self.stack.addWidget(self._create_welcome())      # 0
         self.stack.addWidget(self._create_setup())        # 1
@@ -3745,6 +3804,7 @@ class DashboardWindow(QMainWindow):
         # Show at least 1% on the bar if there's any progress
         bar_value = int(sync_pct) if sync_pct >= 1.0 else (1 if sync_pct > 0 else 0)
         self.sync_progress.setValue(bar_value)
+        self.sync_progress.repaint()
         self.sync_percent_label.setText(f"{sync_pct:.1f}%")
         
         # Format block height with commas
@@ -3767,6 +3827,7 @@ class DashboardWindow(QMainWindow):
         self.tray_update_zebra.setEnabled(not status.running)
         
         # Force UI to repaint
+        self.update()
         QApplication.processEvents()
     
     def _stop(self):
