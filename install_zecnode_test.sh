@@ -3682,7 +3682,6 @@ class DashboardWindow(QMainWindow):
                 background-color: #ef4444;
             }
         """)
-        self.stop_btn.setToolTip("Stop")
         self.stop_btn.clicked.connect(self._stop)
         btn_row.addWidget(self.stop_btn)
         
@@ -3702,7 +3701,6 @@ class DashboardWindow(QMainWindow):
                 background-color: #22c55e;
             }
         """)
-        self.start_btn.setToolTip("Start")
         self.start_btn.clicked.connect(self._start)
         self.start_btn.setVisible(False)
         btn_row.addWidget(self.start_btn)
@@ -3731,7 +3729,6 @@ class DashboardWindow(QMainWindow):
                 border-color: #222;
             }
         """)
-        self.restart_btn.setToolTip("Restart")
         self.restart_btn.clicked.connect(self._restart)
         btn_row.addWidget(self.restart_btn)
         
@@ -3756,7 +3753,6 @@ class DashboardWindow(QMainWindow):
                 border-color: #f4b728;
             }
         """)
-        logs_btn.setToolTip("View Logs")
         logs_btn.clicked.connect(self._show_logs)
         btn_row.addWidget(logs_btn)
         
