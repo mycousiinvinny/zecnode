@@ -3687,18 +3687,19 @@ class DashboardWindow(QMainWindow):
         # Toggle switch
         self.lwd_toggle = QPushButton("OFF")
         self.lwd_toggle.setCheckable(True)
-        self.lwd_toggle.setFixedSize(60, 28)
+        self.lwd_toggle.setFixedSize(70, 32)
         self.lwd_toggle.setStyleSheet("""
             QPushButton {
-                background-color: #333;
-                border: none;
-                border-radius: 14px;
-                color: #888;
-                font-size: 11px;
+                background-color: #444;
+                border: 2px solid #555;
+                border-radius: 16px;
+                color: #aaa;
+                font-size: 12px;
                 font-weight: bold;
             }
             QPushButton:checked {
                 background-color: #4ade80;
+                border-color: #4ade80;
                 color: #0f0f14;
             }
         """)
