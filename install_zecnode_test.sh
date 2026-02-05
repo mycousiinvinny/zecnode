@@ -3659,6 +3659,97 @@ class DashboardWindow(QMainWindow):
         
         layout.addWidget(sync_container)
         
+        layout.addSpacing(15)
+        
+        # Lightwalletd Card
+        lwd_container = QWidget()
+        lwd_container.setObjectName("lwdContainer")
+        lwd_container.setStyleSheet("""
+            #lwdContainer {
+                background-color: #1a1a24;
+                border: 1px solid #2a2a35;
+                border-radius: 12px;
+                padding: 15px;
+            }
+        """)
+        lwd_layout = QVBoxLayout(lwd_container)
+        lwd_layout.setContentsMargins(20, 15, 20, 15)
+        lwd_layout.setSpacing(10)
+        
+        # Top row: Title and Toggle
+        lwd_top = QHBoxLayout()
+        lwd_title = QLabel("Lightwalletd")
+        lwd_title.setFont(QFont("Segoe UI", 13, QFont.Bold))
+        lwd_title.setStyleSheet("color: #e8e8e8; border: none; background: transparent;")
+        lwd_top.addWidget(lwd_title)
+        lwd_top.addStretch()
+        
+        # Toggle switch
+        self.lwd_toggle = QPushButton("OFF")
+        self.lwd_toggle.setCheckable(True)
+        self.lwd_toggle.setFixedSize(60, 28)
+        self.lwd_toggle.setStyleSheet("""
+            QPushButton {
+                background-color: #333;
+                border: none;
+                border-radius: 14px;
+                color: #888;
+                font-size: 11px;
+                font-weight: bold;
+            }
+            QPushButton:checked {
+                background-color: #4ade80;
+                color: #0f0f14;
+            }
+        """)
+        self.lwd_toggle.clicked.connect(self._toggle_lightwalletd)
+        lwd_top.addWidget(self.lwd_toggle)
+        lwd_layout.addLayout(lwd_top)
+        
+        # Status row
+        lwd_status_row = QHBoxLayout()
+        status_label = QLabel("Status:")
+        status_label.setStyleSheet("color: #888; font-size: 12px; border: none; background: transparent;")
+        lwd_status_row.addWidget(status_label)
+        
+        self.lwd_status = QLabel("Off")
+        self.lwd_status.setStyleSheet("color: #888; font-size: 12px; border: none; background: transparent;")
+        lwd_status_row.addWidget(self.lwd_status)
+        lwd_status_row.addStretch()
+        lwd_layout.addLayout(lwd_status_row)
+        
+        # URL row (hidden when off)
+        self.lwd_url_row = QWidget()
+        self.lwd_url_row.setStyleSheet("background: transparent;")
+        lwd_url_layout = QHBoxLayout(self.lwd_url_row)
+        lwd_url_layout.setContentsMargins(0, 0, 0, 0)
+        lwd_url_layout.setSpacing(10)
+        
+        self.lwd_url = QLabel("grpc://192.168.1.100:9067")
+        self.lwd_url.setStyleSheet("color: #4ade80; font-size: 12px; font-family: monospace; border: none; background: transparent;")
+        lwd_url_layout.addWidget(self.lwd_url)
+        lwd_url_layout.addStretch()
+        
+        self.lwd_copy_btn = QPushButton("Copy")
+        self.lwd_copy_btn.setFixedSize(55, 26)
+        self.lwd_copy_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #2a2a3a;
+                border: 1px solid #444;
+                border-radius: 13px;
+                color: #e8e8e8;
+                font-size: 11px;
+            }
+            QPushButton:hover { background-color: #3a3a4a; }
+        """)
+        self.lwd_copy_btn.clicked.connect(self._copy_lwd_url)
+        lwd_url_layout.addWidget(self.lwd_copy_btn)
+        
+        self.lwd_url_row.setVisible(False)
+        lwd_layout.addWidget(self.lwd_url_row)
+        
+        layout.addWidget(lwd_container)
+        
         layout.addStretch()
         
         # Circular icon buttons - centered
@@ -4076,6 +4167,29 @@ class DashboardWindow(QMainWindow):
             dialog.exec_()
         
         self._start_refresh()
+    
+    def _toggle_lightwalletd(self):
+        """Toggle lightwalletd on/off"""
+        if self.lwd_toggle.isChecked():
+            self.lwd_toggle.setText("ON")
+            self.lwd_status.setText("Running")
+            self.lwd_status.setStyleSheet("color: #4ade80; font-size: 12px; border: none; background: transparent;")
+            self.lwd_url_row.setVisible(True)
+            # TODO: Actually start lightwalletd container
+        else:
+            self.lwd_toggle.setText("OFF")
+            self.lwd_status.setText("Off")
+            self.lwd_status.setStyleSheet("color: #888; font-size: 12px; border: none; background: transparent;")
+            self.lwd_url_row.setVisible(False)
+            # TODO: Actually stop lightwalletd container
+    
+    def _copy_lwd_url(self):
+        """Copy lightwalletd URL to clipboard"""
+        clipboard = QApplication.clipboard()
+        clipboard.setText(self.lwd_url.text())
+        # Brief visual feedback
+        self.lwd_copy_btn.setText("Copied!")
+        QTimer.singleShot(1500, lambda: self.lwd_copy_btn.setText("Copy"))
     
     def _show_logs(self):
         dialog = LogsDialog(self, self.node_manager)
