@@ -3687,19 +3687,20 @@ class DashboardWindow(QMainWindow):
         # Toggle switch
         self.lwd_toggle = QPushButton("OFF")
         self.lwd_toggle.setCheckable(True)
-        self.lwd_toggle.setFixedSize(70, 32)
-        self.lwd_toggle.setFont(QFont("Ubuntu", 11, QFont.Bold))
+        self.lwd_toggle.setFixedSize(80, 36)
         self.lwd_toggle.setStyleSheet("""
             QPushButton {
                 background-color: #444;
                 border: 2px solid #555;
-                border-radius: 16px;
-                color: #aaa;
+                border-radius: 8px;
+                color: white;
+                font-size: 14px;
+                font-weight: bold;
             }
             QPushButton:checked {
                 background-color: #4ade80;
                 border-color: #4ade80;
-                color: #0f0f14;
+                color: black;
             }
         """)
         self.lwd_toggle.clicked.connect(self._toggle_lightwalletd)
@@ -3731,14 +3732,14 @@ class DashboardWindow(QMainWindow):
         lwd_url_layout.addStretch()
         
         self.lwd_copy_btn = QPushButton("Copy")
-        self.lwd_copy_btn.setFixedSize(60, 28)
-        self.lwd_copy_btn.setFont(QFont("Ubuntu", 10))
+        self.lwd_copy_btn.setFixedSize(70, 32)
         self.lwd_copy_btn.setStyleSheet("""
             QPushButton {
                 background-color: #2a2a3a;
                 border: 1px solid #444;
-                border-radius: 14px;
-                color: #e8e8e8;
+                border-radius: 8px;
+                color: white;
+                font-size: 13px;
             }
             QPushButton:hover { background-color: #3a3a4a; }
         """)
