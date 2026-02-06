@@ -3694,8 +3694,9 @@ class DashboardWindow(QMainWindow):
                 border: 2px solid #555;
                 border-radius: 21px;
                 color: white;
-                font-size: 14px;
+                font-size: 13px;
                 font-weight: bold;
+                padding: 5px 15px;
             }
             QPushButton:checked {
                 background-color: #4ade80;
@@ -3739,7 +3740,8 @@ class DashboardWindow(QMainWindow):
                 border: 1px solid #444;
                 border-radius: 21px;
                 color: white;
-                font-size: 14px;
+                font-size: 13px;
+                padding: 5px 15px;
             }
             QPushButton:hover { background-color: #3a3a4a; }
         """)
