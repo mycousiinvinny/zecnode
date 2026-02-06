@@ -3669,12 +3669,11 @@ class DashboardWindow(QMainWindow):
                 background-color: #1a1a24;
                 border: 1px solid #2a2a35;
                 border-radius: 12px;
-                padding: 15px;
             }
         """)
         lwd_layout = QVBoxLayout(lwd_container)
-        lwd_layout.setContentsMargins(20, 15, 20, 15)
-        lwd_layout.setSpacing(10)
+        lwd_layout.setContentsMargins(15, 12, 15, 12)
+        lwd_layout.setSpacing(8)
         
         # Top row: Title and Toggle
         lwd_top = QHBoxLayout()
@@ -3687,16 +3686,16 @@ class DashboardWindow(QMainWindow):
         # Toggle switch
         self.lwd_toggle = QPushButton("OFF")
         self.lwd_toggle.setCheckable(True)
-        self.lwd_toggle.setFixedSize(110, 42)
+        self.lwd_toggle.setFixedSize(90, 34)
         self.lwd_toggle.setStyleSheet("""
             QPushButton {
                 background-color: #444;
                 border: 2px solid #555;
-                border-radius: 21px;
+                border-radius: 17px;
                 color: white;
-                font-size: 13px;
+                font-size: 12px;
                 font-weight: bold;
-                padding: 5px 15px;
+                padding: 4px 10px;
             }
             QPushButton:checked {
                 background-color: #4ade80;
@@ -3733,15 +3732,15 @@ class DashboardWindow(QMainWindow):
         lwd_url_layout.addStretch()
         
         self.lwd_copy_btn = QPushButton("Copy")
-        self.lwd_copy_btn.setFixedSize(110, 42)
+        self.lwd_copy_btn.setFixedSize(90, 34)
         self.lwd_copy_btn.setStyleSheet("""
             QPushButton {
                 background-color: #2a2a3a;
                 border: 1px solid #444;
-                border-radius: 21px;
+                border-radius: 17px;
                 color: white;
-                font-size: 13px;
-                padding: 5px 15px;
+                font-size: 12px;
+                padding: 4px 10px;
             }
             QPushButton:hover { background-color: #3a3a4a; }
         """)
