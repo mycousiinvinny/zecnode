@@ -3687,12 +3687,12 @@ class DashboardWindow(QMainWindow):
         # Toggle switch
         self.lwd_toggle = QPushButton("OFF")
         self.lwd_toggle.setCheckable(True)
-        self.lwd_toggle.setFixedSize(100, 36)
+        self.lwd_toggle.setFixedSize(110, 42)
         self.lwd_toggle.setStyleSheet("""
             QPushButton {
                 background-color: #444;
                 border: 2px solid #555;
-                border-radius: 18px;
+                border-radius: 21px;
                 color: white;
                 font-size: 14px;
                 font-weight: bold;
@@ -3732,12 +3732,12 @@ class DashboardWindow(QMainWindow):
         lwd_url_layout.addStretch()
         
         self.lwd_copy_btn = QPushButton("Copy")
-        self.lwd_copy_btn.setFixedSize(100, 36)
+        self.lwd_copy_btn.setFixedSize(110, 42)
         self.lwd_copy_btn.setStyleSheet("""
             QPushButton {
                 background-color: #2a2a3a;
                 border: 1px solid #444;
-                border-radius: 18px;
+                border-radius: 21px;
                 color: white;
                 font-size: 14px;
             }
