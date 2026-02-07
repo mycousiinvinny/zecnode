@@ -3681,6 +3681,20 @@ class DashboardWindow(QMainWindow):
         lwd_title.setFont(QFont("Segoe UI", 13, QFont.Bold))
         lwd_title.setStyleSheet("color: #e8e8e8; border: none; background: transparent;")
         lwd_top.addWidget(lwd_title)
+        
+        # Info icon with tooltip
+        lwd_info = QLabel("ⓘ")
+        lwd_info.setStyleSheet("color: #666; font-size: 14px; border: none; background: transparent;")
+        lwd_info.setToolTip(
+            "Lightwalletd lets mobile wallets (like Zashi and Ywallet) "
+            "connect to YOUR node instead of public servers.\n\n"
+            "• More privacy - your transactions stay local\n"
+            "• More decentralization - reduces reliance on third parties\n"
+            "• Share with friends and family for private wallet access\n\n"
+            "Requires Zebra to be fully synced."
+        )
+        lwd_top.addWidget(lwd_info)
+        
         lwd_top.addStretch()
         
         # Toggle switch
