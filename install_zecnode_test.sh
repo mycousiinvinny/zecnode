@@ -299,10 +299,24 @@ def main():
     if config.is_installed():
         window = DashboardWindow(config)
     else:
-        # Check if zebra container already exists (user set up node manually)
+        # Check if zebra container exists OR data directories exist
         import shutil
         
-        if shutil.which("docker"):
+        already_setup = False
+        
+        # Check 1: Zebra data directories exist on SSD
+        data_path = "/mnt/zebra-data"
+        if os.path.exists(f"{data_path}/zebra-cache") or os.path.exists(f"{data_path}/zebra-state"):
+            # Data exists! Mark as installed and go to dashboard
+            config.set("data_path", data_path)
+            config.set("install_phase", Config.PHASE_COMPLETE)
+            config.set("installed", True)
+            config.set("docker_configured", True)
+            config.save()
+            already_setup = True
+        
+        # Check 2: Zebra container exists
+        if not already_setup and shutil.which("docker"):
             try:
                 result = subprocess.run(
                     ["docker", "ps", "-a", "--filter", "name=zebra", "--format", "{{.Names}}"],
@@ -314,16 +328,17 @@ def main():
                         ["docker", "inspect", "-f", "{{range .Mounts}}{{.Source}}{{end}}", "zebra"],
                         capture_output=True, text=True, timeout=10
                     )
-                    data_path = mount_result.stdout.strip() or "/mnt/zcash"
+                    data_path = mount_result.stdout.strip() or "/mnt/zebra-data"
                     
                     # Create config and go straight to dashboard
                     config.set_data_path(data_path)
                     config.mark_installed()
-                    window = DashboardWindow(config)
-                else:
-                    window = InstallerWizard(config)
+                    already_setup = True
             except:
-                window = InstallerWizard(config)
+                pass
+        
+        if already_setup:
+            window = DashboardWindow(config)
         else:
             window = InstallerWizard(config)
     
