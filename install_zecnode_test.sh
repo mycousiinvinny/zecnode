@@ -83,11 +83,12 @@ QMainWindow, QDialog {
 
 /* Tooltips */
 QToolTip {
-    background-color: #2a2a3a;
-    color: #e8e8e8;
-    border: 1px solid #444;
-    padding: 5px;
-    border-radius: 4px;
+    background-color: #1a1a24;
+    color: #ffffff;
+    border: 2px solid #4ade80;
+    padding: 12px;
+    border-radius: 8px;
+    font-size: 13px;
 }
 
 /* Labels */
