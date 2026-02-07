@@ -376,6 +376,7 @@ class Config:
         "node_started": False,
         "autostart": False,
         "zebra_version": "latest",
+        "lightwalletd_enabled": False,
     }
     
     def __init__(self):
@@ -518,6 +519,11 @@ class NodeManager:
     CONTAINER_NAME = "zebra"
     IMAGE_NAME = "zfnd/zebra:latest"
     MOUNT_PATH = "/mnt/zebra-data"
+    
+    # Lightwalletd
+    LWD_CONTAINER_NAME = "lightwalletd"
+    LWD_IMAGE_NAME = "electriccoinco/lightwalletd:latest"
+    LWD_PORT = 9067
     
     # Directory structure on SSD
     # Step 6: sudo mkdir -p /mnt/zebra-data/{docker,containerd}
@@ -1457,13 +1463,23 @@ gsettings set org.gnome.desktop.session idle-delay 0 2>/dev/null || true
                 capture_output=True
             )
             
-            # Start container with volume mounts
+            # Ensure zecnode network exists
+            subprocess.run(
+                ["docker", "network", "create", "zecnode"],
+                capture_output=True
+            )
+            
+            # Start container with volume mounts and RPC enabled
+            # Environment variables enable RPC for lightwalletd support
             result = subprocess.run([
                 "docker", "run", "-d",
                 "--name", self.CONTAINER_NAME,
+                "--network", "zecnode",
                 "-v", f"{cache_path}:/var/cache/zebrad-cache",
                 "-v", f"{state_path}:/var/lib/zebrad",
                 "-p", "8233:8233",
+                "-e", "ZEBRA_RPC__LISTEN_ADDR=0.0.0.0:8232",
+                "-e", "ZEBRA_RPC__ENABLE_COOKIE_AUTH=false",
                 "--restart", "unless-stopped",
                 self.IMAGE_NAME
             ], capture_output=True, text=True)
@@ -1648,6 +1664,104 @@ gsettings set org.gnome.desktop.session idle-delay 0 2>/dev/null || true
                 return f"{minutes}m"
         except:
             return "--"
+    
+    # ==================== LIGHTWALLETD ====================
+    
+    def get_local_ip(self) -> str:
+        """Get the local IP address of this machine"""
+        try:
+            import socket
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            s.connect(("8.8.8.8", 80))
+            ip = s.getsockname()[0]
+            s.close()
+            return ip
+        except:
+            return "127.0.0.1"
+    
+    def is_lightwalletd_running(self) -> bool:
+        """Check if lightwalletd container is running"""
+        try:
+            result = subprocess.run(
+                ["docker", "ps", "-q", "-f", f"name={self.LWD_CONTAINER_NAME}"],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+            return bool(result.stdout.strip())
+        except:
+            return False
+    
+    def start_lightwalletd(self) -> Tuple[bool, str]:
+        """Start lightwalletd container"""
+        try:
+            # Check if Zebra is running first
+            status = self.get_status()
+            if not status.running:
+                return False, "Zebra must be running first"
+            
+            # Check if already running
+            if self.is_lightwalletd_running():
+                return True, "Lightwalletd already running"
+            
+            # Remove any existing stopped container
+            subprocess.run(
+                ["docker", "rm", "-f", self.LWD_CONTAINER_NAME],
+                capture_output=True
+            )
+            
+            # Ensure zecnode network exists
+            subprocess.run(
+                ["docker", "network", "create", "zecnode"],
+                capture_output=True
+            )
+            
+            # Start lightwalletd container on same network as Zebra
+            # Uses container name 'zebra' for DNS resolution
+            result = subprocess.run([
+                "docker", "run", "-d",
+                "--name", self.LWD_CONTAINER_NAME,
+                "--network", "zecnode",
+                "-p", f"{self.LWD_PORT}:9067",
+                "--restart", "unless-stopped",
+                self.LWD_IMAGE_NAME,
+                "--zcash-conf-path", "/dev/null",
+                "--grpc-bind-addr", "0.0.0.0:9067",
+                "--no-tls-very-insecure",
+                f"--zebra-rpc-address={self.CONTAINER_NAME}:8232"
+            ], capture_output=True, text=True, timeout=120)
+            
+            if result.returncode != 0:
+                return False, f"Failed to start lightwalletd: {result.stderr}"
+            
+            return True, "Lightwalletd started"
+            
+        except subprocess.TimeoutExpired:
+            return False, "Timeout starting lightwalletd"
+        except Exception as e:
+            return False, f"Error: {str(e)}"
+    
+    def stop_lightwalletd(self) -> Tuple[bool, str]:
+        """Stop lightwalletd container"""
+        try:
+            result = subprocess.run(
+                ["docker", "stop", "-t", "3", self.LWD_CONTAINER_NAME],
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+            # Also remove container
+            subprocess.run(
+                ["docker", "rm", "-f", self.LWD_CONTAINER_NAME],
+                capture_output=True
+            )
+            return True, "Lightwalletd stopped"
+        except Exception as e:
+            return False, f"Error: {str(e)}"
+    
+    def get_lightwalletd_url(self) -> str:
+        """Get the lightwalletd gRPC URL"""
+        return f"grpc://{self.get_local_ip()}:{self.LWD_PORT}"
 
 ENDOFFILE
 
@@ -4054,9 +4168,60 @@ class DashboardWindow(QMainWindow):
         self.tray_start.setVisible(not status.running)
         self.tray_update_zebra.setEnabled(not status.running)
         
+        # Lightwalletd status
+        self._update_lightwalletd_status(status)
+        
         # Force UI to repaint
         self.update()
         QApplication.processEvents()
+    
+    def _update_lightwalletd_status(self, zebra_status):
+        """Update lightwalletd UI based on current state"""
+        lwd_running = self.node_manager.is_lightwalletd_running()
+        lwd_enabled = self.config.get("lightwalletd_enabled", False)
+        is_synced = zebra_status.running and zebra_status.sync_percent >= 99.9
+        
+        # Auto-start if enabled and Zebra is synced
+        if lwd_enabled and is_synced and not lwd_running:
+            success, _ = self.node_manager.start_lightwalletd()
+            lwd_running = success
+        
+        # Auto-stop if Zebra stops
+        if lwd_running and not zebra_status.running:
+            self.node_manager.stop_lightwalletd()
+            lwd_running = False
+        
+        # Update UI
+        if lwd_running:
+            self.lwd_toggle.setChecked(True)
+            self.lwd_toggle.setText("ON")
+            self.lwd_status.setText("Running")
+            self.lwd_status.setStyleSheet("color: #4ade80; font-size: 12px; border: none; background: transparent;")
+            self.lwd_url.setText(self.node_manager.get_lightwalletd_url())
+            self.lwd_url_row.setVisible(True)
+            self.lwd_toggle.setEnabled(True)
+        elif not zebra_status.running:
+            self.lwd_toggle.setChecked(False)
+            self.lwd_toggle.setText("OFF")
+            self.lwd_status.setText("Node stopped")
+            self.lwd_status.setStyleSheet("color: #888; font-size: 12px; border: none; background: transparent;")
+            self.lwd_url_row.setVisible(False)
+            self.lwd_toggle.setEnabled(False)
+        elif zebra_status.sync_percent < 99.9:
+            self.lwd_toggle.setChecked(False)
+            self.lwd_toggle.setText("OFF")
+            self.lwd_status.setText(f"Syncing ({zebra_status.sync_percent:.1f}%)")
+            self.lwd_status.setStyleSheet("color: #888; font-size: 12px; border: none; background: transparent;")
+            self.lwd_url_row.setVisible(False)
+            self.lwd_toggle.setEnabled(False)
+        else:
+            # Zebra synced but lwd not running
+            self.lwd_toggle.setChecked(False)
+            self.lwd_toggle.setText("OFF")
+            self.lwd_status.setText("Ready")
+            self.lwd_status.setStyleSheet("color: #888; font-size: 12px; border: none; background: transparent;")
+            self.lwd_url_row.setVisible(False)
+            self.lwd_toggle.setEnabled(True)
     
     def _stop(self):
         self._action_in_progress = True
@@ -4203,17 +4368,57 @@ class DashboardWindow(QMainWindow):
     def _toggle_lightwalletd(self):
         """Toggle lightwalletd on/off"""
         if self.lwd_toggle.isChecked():
-            self.lwd_toggle.setText("ON")
-            self.lwd_status.setText("Running")
-            self.lwd_status.setStyleSheet("color: #4ade80; font-size: 12px; border: none; background: transparent;")
-            self.lwd_url_row.setVisible(True)
-            # TODO: Actually start lightwalletd container
+            # Check if Zebra is synced
+            status = self.node_manager.get_status()
+            if not status.running:
+                self.lwd_toggle.setChecked(False)
+                self.lwd_status.setText("Requires running node")
+                self.lwd_status.setStyleSheet("color: #f59e0b; font-size: 12px; border: none; background: transparent;")
+                return
+            
+            if status.sync_percent < 100:
+                self.lwd_toggle.setChecked(False)
+                self.lwd_status.setText(f"Requires synced node ({status.sync_percent:.1f}%)")
+                self.lwd_status.setStyleSheet("color: #f59e0b; font-size: 12px; border: none; background: transparent;")
+                return
+            
+            # Start lightwalletd
+            self.lwd_toggle.setText("...")
+            self.lwd_toggle.setEnabled(False)
+            self.lwd_status.setText("Starting...")
+            self.lwd_status.setStyleSheet("color: #f4b728; font-size: 12px; border: none; background: transparent;")
+            QApplication.processEvents()
+            
+            success, msg = self.node_manager.start_lightwalletd()
+            
+            if success:
+                self.lwd_toggle.setText("ON")
+                self.lwd_status.setText("Running")
+                self.lwd_status.setStyleSheet("color: #4ade80; font-size: 12px; border: none; background: transparent;")
+                self.lwd_url.setText(self.node_manager.get_lightwalletd_url())
+                self.lwd_url_row.setVisible(True)
+                self.config.set("lightwalletd_enabled", True)
+            else:
+                self.lwd_toggle.setChecked(False)
+                self.lwd_toggle.setText("OFF")
+                self.lwd_status.setText(f"Error: {msg}")
+                self.lwd_status.setStyleSheet("color: #ef4444; font-size: 12px; border: none; background: transparent;")
+            
+            self.lwd_toggle.setEnabled(True)
         else:
+            # Stop lightwalletd
+            self.lwd_toggle.setText("...")
+            self.lwd_toggle.setEnabled(False)
+            QApplication.processEvents()
+            
+            self.node_manager.stop_lightwalletd()
+            
             self.lwd_toggle.setText("OFF")
+            self.lwd_toggle.setEnabled(True)
             self.lwd_status.setText("Off")
             self.lwd_status.setStyleSheet("color: #888; font-size: 12px; border: none; background: transparent;")
             self.lwd_url_row.setVisible(False)
-            # TODO: Actually stop lightwalletd container
+            self.config.set("lightwalletd_enabled", False)
     
     def _copy_lwd_url(self):
         """Copy lightwalletd URL to clipboard"""
