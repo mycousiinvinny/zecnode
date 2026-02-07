@@ -3685,7 +3685,22 @@ class DashboardWindow(QMainWindow):
         
         # Info icon with tooltip
         lwd_info = QLabel("ⓘ")
-        lwd_info.setStyleSheet("color: #888; font-size: 16px; border: none; background: transparent;")
+        lwd_info.setStyleSheet("""
+            QLabel {
+                color: #888;
+                font-size: 16px;
+                border: none;
+                background: transparent;
+            }
+            QToolTip {
+                background-color: #1a1a24;
+                color: #ffffff;
+                border: 2px solid #4ade80;
+                padding: 12px;
+                border-radius: 8px;
+                font-size: 13px;
+            }
+        """)
         lwd_info.setToolTip(
             "Lightwalletd lets mobile wallets (like Zashi and Ywallet) "
             "connect to YOUR node instead of public servers.\n\n"
