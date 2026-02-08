@@ -14,10 +14,35 @@ cd "$PROJECT_DIR"
 # Always clear Python cache to avoid stale bytecode issues
 rm -rf "$PROJECT_DIR/__pycache__" 2>/dev/null || true
 
-# Reset config if Docker isn't installed (fresh system or wiped)
-if ! command -v docker &> /dev/null; then
-    echo "Docker not found - resetting config for fresh install..."
-    rm -f "$HOME/.zecnode/config.json" 2>/dev/null || true
+# Smart config handling - detect actual system state
+CONFIG_FILE="$HOME/.zecnode/config.json"
+if [ -f "$CONFIG_FILE" ]; then
+    # Config exists - check if it matches reality
+    if ! command -v docker &> /dev/null; then
+        echo "Docker not found but config exists - resetting for fresh install..."
+        rm -f "$CONFIG_FILE" 2>/dev/null || true
+    fi
+else
+    # No config - check if this is actually a fresh system or an existing setup
+    if command -v docker &> /dev/null; then
+        # Docker exists but no config - check for zebra data
+        if [ -d "/mnt/zebra-data/zebra-state" ] && [ "$(ls -A /mnt/zebra-data/zebra-state 2>/dev/null)" ]; then
+            echo "Existing Zebra data found - creating config..."
+            mkdir -p "$HOME/.zecnode"
+            cat > "$CONFIG_FILE" << 'CONFIGEOF'
+{
+  "installed": true,
+  "install_phase": "complete",
+  "data_path": "/mnt/zebra-data",
+  "docker_configured": true,
+  "node_started": false,
+  "autostart": false,
+  "zebra_version": "3.1.0",
+  "lightwalletd_enabled": false
+}
+CONFIGEOF
+        fi
+    fi
 fi
 
 # Download ZecNode icon
