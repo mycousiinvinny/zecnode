@@ -2106,7 +2106,14 @@ class InstallerWizard(QMainWindow):
         """Check if we need to resume installation from a previous phase"""
         phase = self.config.get_phase()
         
+        # First, check actual system state - if Docker is installed but phase says not started,
+        # skip to drive selection
         if phase == Config.PHASE_NOT_STARTED:
+            if self.node_manager.check_docker_installed() and self.node_manager.check_curl_installed():
+                # Docker and curl already installed, skip to drive selection
+                self.config.set_phase(Config.PHASE_REBOOT_DONE)
+                QTimer.singleShot(100, lambda: self._go_to_page(2))
+                return
             # Fresh install, stay on welcome
             return
         
