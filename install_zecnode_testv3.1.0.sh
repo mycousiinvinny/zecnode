@@ -11,6 +11,15 @@ PROJECT_DIR="$HOME/zecnode"
 mkdir -p "$PROJECT_DIR"
 cd "$PROJECT_DIR"
 
+# Always clear Python cache to avoid stale bytecode issues
+rm -rf "$PROJECT_DIR/__pycache__" 2>/dev/null || true
+
+# Reset config if Docker isn't installed (fresh system or wiped)
+if ! command -v docker &> /dev/null; then
+    echo "Docker not found - resetting config for fresh install..."
+    rm -f "$HOME/.zecnode/config.json" 2>/dev/null || true
+fi
+
 # Download ZecNode icon
 echo "Downloading icon..."
 curl -sSL -o "$PROJECT_DIR/zecnode-icon.png" "https://raw.githubusercontent.com/mycousiinvinny/zecnode/main/zecnode-icon.png" 2>/dev/null || true
@@ -546,7 +555,7 @@ class NodeManager:
     """Manages the Zcash node (Zebra) via Docker"""
     
     CONTAINER_NAME = "zebra"
-    IMAGE_NAME = "zfnd/zebra:v3.1.0"
+    IMAGE_NAME = "zfnd/zebra:3.1.0"
     MOUNT_PATH = "/mnt/zebra-data"
     
     # Lightwalletd
@@ -1398,7 +1407,7 @@ gsettings set org.gnome.desktop.session idle-delay 0 2>/dev/null || true
     def pull_zebra_image(self, progress_callback=None) -> Tuple[bool, str]:
         """
         Step:
-            docker pull zfnd/zebra:v3.1.0
+            docker pull zfnd/zebra:3.1.0
         """
         if progress_callback:
             progress_callback("Downloading Zebra image (this may take a while)...")
@@ -3421,7 +3430,7 @@ class UpdateThread(QThread):
             elif self.update_type == "zebra":
                 # Pull latest image
                 result = subprocess.run(
-                    ["docker", "pull", "zfnd/zebra:v3.1.0"],
+                    ["docker", "pull", "zfnd/zebra:3.1.0"],
                     capture_output=True, text=True, timeout=300
                 )
                 if result.returncode != 0:
@@ -3485,7 +3494,7 @@ class UpdateThread(QThread):
                 # Add port mapping
                 docker_cmd.extend(["-p", "8233:8233"])
                 
-                docker_cmd.append("zfnd/zebra:v3.1.0")
+                docker_cmd.append("zfnd/zebra:3.1.0")
                 
                 result = subprocess.run(docker_cmd, capture_output=True, text=True, timeout=30)
                 
