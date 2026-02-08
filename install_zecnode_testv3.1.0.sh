@@ -3661,6 +3661,11 @@ class DashboardWindow(QMainWindow):
         self.price_timer.timeout.connect(self._fetch_price)
         self.price_timer.start(30000)
         self._fetch_price()
+        
+        # Cleanup timer - garbage collect every hour to prevent zombie thread buildup
+        self.cleanup_timer = QTimer()
+        self.cleanup_timer.timeout.connect(self._cleanup_threads)
+        self.cleanup_timer.start(3600000)  # 1 hour in milliseconds
     
     def mousePressEvent(self, event):
         """Enable dragging the window"""
@@ -4161,6 +4166,13 @@ class DashboardWindow(QMainWindow):
         if self.refresh_thread is not None and self.refresh_thread.isRunning():
             return
         
+        # Thread pool limit - if too many threads, force cleanup first
+        import threading
+        active_threads = threading.active_count()
+        if active_threads > 100:
+            print(f"Thread limit reached ({active_threads}), forcing cleanup...")
+            self._cleanup_threads()
+        
         # Clean up old thread
         if self.refresh_thread is not None:
             try:
@@ -4172,6 +4184,15 @@ class DashboardWindow(QMainWindow):
         self.refresh_thread = RefreshThread(self.node_manager)
         self.refresh_thread.finished.connect(self._on_refresh_done)
         self.refresh_thread.start()
+    
+    def _cleanup_threads(self):
+        """Force garbage collection to clean up zombie threads"""
+        import gc
+        import threading
+        before = threading.active_count()
+        gc.collect()
+        after = threading.active_count()
+        print(f"Thread cleanup: {before} -> {after} threads")
     
     def _on_refresh_done(self, status, has_internet, ssd, sd):
         """Handle refresh results from background thread"""
