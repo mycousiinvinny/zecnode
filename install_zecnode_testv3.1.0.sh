@@ -304,9 +304,23 @@ def main():
         
         already_setup = False
         
-        # Check 1: Zebra data directories exist on SSD
+        # Check 1: Zebra data directories exist on SSD AND have actual data
         data_path = "/mnt/zebra-data"
-        if os.path.exists(f"{data_path}/zebra-cache") or os.path.exists(f"{data_path}/zebra-state"):
+        cache_path = f"{data_path}/zebra-cache"
+        state_path = f"{data_path}/zebra-state"
+        
+        # Check if directories exist and are not empty
+        def has_data(path):
+            if not os.path.exists(path):
+                return False
+            try:
+                # Check if directory has more than just . and ..
+                contents = os.listdir(path)
+                return len(contents) > 0
+            except:
+                return False
+        
+        if has_data(cache_path) or has_data(state_path):
             # Data exists! Mark as installed and go to dashboard
             config.set("data_path", data_path)
             config.set("install_phase", Config.PHASE_COMPLETE)
