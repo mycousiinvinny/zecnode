@@ -1783,7 +1783,7 @@ gsettings set org.gnome.desktop.session idle-delay 0 2>/dev/null || true
             conf_dir = Path.home() / ".zecnode"
             conf_dir.mkdir(exist_ok=True)
             conf_file = conf_dir / "zcash.conf"
-            conf_file.write_text(f"rpcbind={self.CONTAINER_NAME}\nrpcport=8232\n")
+            conf_file.write_text(f"rpcbind={self.CONTAINER_NAME}\nrpcport=8232\nrpcuser=zecnode\nrpcpassword=zecnode\n")
             
             # Start lightwalletd container on same network as Zebra
             # Uses container name 'zebra' for DNS resolution
