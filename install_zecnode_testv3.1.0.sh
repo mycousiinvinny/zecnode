@@ -1788,11 +1788,22 @@ gsettings set org.gnome.desktop.session idle-delay 0 2>/dev/null || true
                 "-p", f"{self.LWD_PORT}:9067",
                 "--restart", "unless-stopped",
                 self.LWD_IMAGE_NAME,
-                "--zcash-conf-path", "/dev/null",
                 "--grpc-bind-addr", "0.0.0.0:9067",
+                "--rpchost", self.CONTAINER_NAME,
+                "--rpcport", "8232",
                 "--no-tls-very-insecure",
-                f"--zebra-rpc-address={self.CONTAINER_NAME}:8232"
+                "--log-file", "/dev/stdout"
             ], capture_output=True, text=True, timeout=120)
+            
+            if result.returncode != 0:
+                return False, f"Failed to start lightwalletd: {result.stderr}"
+            
+            return True, "Lightwalletd started"
+            
+        except subprocess.TimeoutExpired:
+            return False, "Timeout starting lightwalletd"
+        except Exception as e:
+            return False, f"Error: {str(e)}"
             
             if result.returncode != 0:
                 return False, f"Failed to start lightwalletd: {result.stderr}"
