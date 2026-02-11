@@ -1779,6 +1779,12 @@ gsettings set org.gnome.desktop.session idle-delay 0 2>/dev/null || true
                 capture_output=True
             )
             
+            # Create zcash.conf for lightwalletd (it just needs rpcbind and rpcport)
+            conf_dir = Path.home() / ".zecnode"
+            conf_dir.mkdir(exist_ok=True)
+            conf_file = conf_dir / "zcash.conf"
+            conf_file.write_text(f"rpcbind={self.CONTAINER_NAME}\nrpcport=8232\n")
+            
             # Start lightwalletd container on same network as Zebra
             # Uses container name 'zebra' for DNS resolution
             result = subprocess.run([
@@ -1786,11 +1792,11 @@ gsettings set org.gnome.desktop.session idle-delay 0 2>/dev/null || true
                 "--name", self.LWD_CONTAINER_NAME,
                 "--network", "zecnode",
                 "-p", f"{self.LWD_PORT}:9067",
+                "-v", f"{conf_file}:/app/zcash.conf:ro",
                 "--restart", "unless-stopped",
                 self.LWD_IMAGE_NAME,
+                "--zcash-conf-path", "/app/zcash.conf",
                 "--grpc-bind-addr", "0.0.0.0:9067",
-                "--rpchost", self.CONTAINER_NAME,
-                "--rpcport", "8232",
                 "--no-tls-very-insecure",
                 "--log-file", "/dev/stdout"
             ], capture_output=True, text=True, timeout=120)
