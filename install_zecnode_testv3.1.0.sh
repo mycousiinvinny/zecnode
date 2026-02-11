@@ -4312,7 +4312,7 @@ class DashboardWindow(QMainWindow):
             self.lwd_toggle.setChecked(False)
             self.lwd_toggle.setText("OFF")
             self.lwd_status.setText("Node stopped")
-            self.lwd_status.setStyleSheet("color: #888; font-size: 12px; border: none; background: transparent;")
+            self.lwd_status.setStyleSheet("color: #ef4444; font-size: 12px; border: none; background: transparent;")
             self.lwd_url_row.setVisible(False)
             self.lwd_toggle.setEnabled(False)
         elif zebra_status.sync_percent < 99.9:
