@@ -585,7 +585,7 @@ class NodeManager:
     
     # Lightwalletd
     LWD_CONTAINER_NAME = "lightwalletd"
-    LWD_IMAGE_NAME = "electriccoinco/lightwalletd:latest"
+    LWD_IMAGE_NAME = "mycousiinvinny/lightwalletd:arm64"
     LWD_PORT = 9067
     
     # Directory structure on SSD
