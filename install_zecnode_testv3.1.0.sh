@@ -1785,6 +1785,11 @@ gsettings set org.gnome.desktop.session idle-delay 0 2>/dev/null || true
             conf_file = conf_dir / "zcash.conf"
             conf_file.write_text(f"rpcbind={self.CONTAINER_NAME}\nrpcport=8232\nrpcuser=zecnode\nrpcpassword=zecnode\n")
             
+            # Create lightwalletd cache directory on SSD
+            lwd_cache = "/mnt/zebra-data/lightwalletd"
+            subprocess.run(["sudo", "mkdir", "-p", lwd_cache], capture_output=True)
+            subprocess.run(["sudo", "chown", "-R", f"{os.getuid()}:{os.getgid()}", lwd_cache], capture_output=True)
+            
             # Start lightwalletd container on same network as Zebra
             # Uses container name 'zebra' for DNS resolution
             result = subprocess.run([
@@ -1793,9 +1798,11 @@ gsettings set org.gnome.desktop.session idle-delay 0 2>/dev/null || true
                 "--network", "zecnode",
                 "-p", f"{self.LWD_PORT}:9067",
                 "-v", f"{conf_file}:/app/zcash.conf:ro",
+                "-v", f"{lwd_cache}:/var/lib/lightwalletd",
                 "--restart", "unless-stopped",
                 self.LWD_IMAGE_NAME,
                 "--zcash-conf-path", "/app/zcash.conf",
+                "--data-dir", "/var/lib/lightwalletd",
                 "--grpc-bind-addr", "0.0.0.0:9067",
                 "--no-tls-very-insecure",
                 "--log-file", "/dev/stdout"
@@ -1810,14 +1817,6 @@ gsettings set org.gnome.desktop.session idle-delay 0 2>/dev/null || true
             return False, "Timeout starting lightwalletd"
         except Exception as e:
             return False, f"Error: {str(e)}"
-            
-            if result.returncode != 0:
-                return False, f"Failed to start lightwalletd: {result.stderr}"
-            
-            return True, "Lightwalletd started"
-            
-        except subprocess.TimeoutExpired:
-            return False, "Timeout starting lightwalletd"
         except Exception as e:
             return False, f"Error: {str(e)}"
     
