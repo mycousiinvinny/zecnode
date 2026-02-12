@@ -4326,7 +4326,7 @@ class DashboardWindow(QMainWindow):
             self.lwd_toggle.setChecked(False)
             self.lwd_toggle.setText("OFF")
             self.lwd_status.setText("Ready")
-            self.lwd_status.setStyleSheet("color: #888; font-size: 12px; border: none; background: transparent;")
+            self.lwd_status.setStyleSheet("color: #4ade80; font-size: 12px; border: none; background: transparent;")
             self.lwd_url_row.setVisible(False)
             self.lwd_toggle.setEnabled(True)
     
