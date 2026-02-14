@@ -1840,7 +1840,7 @@ gsettings set org.gnome.desktop.session idle-delay 0 2>/dev/null || true
     
     def get_lightwalletd_url(self) -> str:
         """Get the lightwalletd gRPC URL"""
-        return f"grpc://{self.get_local_ip()}:{self.LWD_PORT}"
+        return f"http://{self.get_local_ip()}:{self.LWD_PORT}"
 
 ENDOFFILE
 
@@ -3961,7 +3961,7 @@ class DashboardWindow(QMainWindow):
         lwd_url_layout.setContentsMargins(0, 0, 0, 0)
         lwd_url_layout.setSpacing(10)
         
-        self.lwd_url = QLabel("grpc://192.168.1.100:9067")
+        self.lwd_url = QLabel("http://192.168.1.100:9067")
         self.lwd_url.setStyleSheet("color: #4ade80; font-size: 12px; font-family: monospace; border: none; background: transparent;")
         lwd_url_layout.addWidget(self.lwd_url)
         lwd_url_layout.addStretch()
@@ -4489,43 +4489,73 @@ class DashboardWindow(QMainWindow):
                 self.lwd_status.setStyleSheet("color: #f59e0b; font-size: 12px; border: none; background: transparent;")
                 return
             
-            # Start lightwalletd
+            # Start lightwalletd in background thread
             self.lwd_toggle.setText("...")
             self.lwd_toggle.setEnabled(False)
             self.lwd_status.setText("Starting...")
             self.lwd_status.setStyleSheet("color: #f4b728; font-size: 12px; border: none; background: transparent;")
-            QApplication.processEvents()
             
-            success, msg = self.node_manager.start_lightwalletd()
+            def start_lwd():
+                success, msg = self.node_manager.start_lightwalletd()
+                return success, msg
             
-            if success:
-                self.lwd_toggle.setText("ON")
-                self.lwd_status.setText("Running")
-                self.lwd_status.setStyleSheet("color: #4ade80; font-size: 12px; border: none; background: transparent;")
-                self.lwd_url.setText(self.node_manager.get_lightwalletd_url())
-                self.lwd_url_row.setVisible(True)
-                self.config.set("lightwalletd_enabled", True)
-            else:
-                self.lwd_toggle.setChecked(False)
-                self.lwd_toggle.setText("OFF")
-                self.lwd_status.setText(f"Error: {msg}")
-                self.lwd_status.setStyleSheet("color: #ef4444; font-size: 12px; border: none; background: transparent;")
+            def on_start_done(result):
+                success, msg = result
+                if success:
+                    self.lwd_toggle.setText("ON")
+                    self.lwd_status.setText("Running")
+                    self.lwd_status.setStyleSheet("color: #4ade80; font-size: 12px; border: none; background: transparent;")
+                    self.lwd_url.setText(self.node_manager.get_lightwalletd_url())
+                    self.lwd_url_row.setVisible(True)
+                    self.config.set("lightwalletd_enabled", True)
+                else:
+                    self.lwd_toggle.setChecked(False)
+                    self.lwd_toggle.setText("OFF")
+                    self.lwd_status.setText(f"Error: {msg}")
+                    self.lwd_status.setStyleSheet("color: #ef4444; font-size: 12px; border: none; background: transparent;")
+                self.lwd_toggle.setEnabled(True)
             
-            self.lwd_toggle.setEnabled(True)
+            self._run_in_thread(start_lwd, on_start_done)
         else:
-            # Stop lightwalletd
+            # Stop lightwalletd in background thread
             self.lwd_toggle.setText("...")
             self.lwd_toggle.setEnabled(False)
-            QApplication.processEvents()
+            self.lwd_status.setText("Stopping...")
+            self.lwd_status.setStyleSheet("color: #f4b728; font-size: 12px; border: none; background: transparent;")
             
-            self.node_manager.stop_lightwalletd()
+            def stop_lwd():
+                self.node_manager.stop_lightwalletd()
+                return True
             
-            self.lwd_toggle.setText("OFF")
-            self.lwd_toggle.setEnabled(True)
-            self.lwd_status.setText("Off")
-            self.lwd_status.setStyleSheet("color: #888; font-size: 12px; border: none; background: transparent;")
-            self.lwd_url_row.setVisible(False)
-            self.config.set("lightwalletd_enabled", False)
+            def on_stop_done(result):
+                self.lwd_toggle.setText("OFF")
+                self.lwd_toggle.setEnabled(True)
+                self.lwd_status.setText("Off")
+                self.lwd_status.setStyleSheet("color: #888; font-size: 12px; border: none; background: transparent;")
+                self.lwd_url_row.setVisible(False)
+                self.config.set("lightwalletd_enabled", False)
+            
+            self._run_in_thread(stop_lwd, on_stop_done)
+    
+    def _run_in_thread(self, func, callback):
+        """Run a function in a background thread and call callback with result"""
+        class WorkerThread(QThread):
+            finished = pyqtSignal(object)
+            def __init__(self, fn):
+                super().__init__()
+                self.fn = fn
+            def run(self):
+                result = self.fn()
+                self.finished.emit(result)
+        
+        thread = WorkerThread(func)
+        thread.finished.connect(callback)
+        thread.finished.connect(lambda: thread.deleteLater())
+        thread.start()
+        # Keep reference to prevent garbage collection
+        if not hasattr(self, '_threads'):
+            self._threads = []
+        self._threads.append(thread)
     
     def _copy_lwd_url(self):
         """Copy lightwalletd URL to clipboard"""
