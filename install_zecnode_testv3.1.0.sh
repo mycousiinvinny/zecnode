@@ -303,114 +303,6 @@ QMenu::item:selected {
     color: #0f0f14;
 }
 """
-
-
-def main():
-    # Kill any existing ZecNode instances (but not ourselves)
-    my_pid = os.getpid()
-    subprocess.run(
-        ["bash", "-c", f"pgrep -f 'python.*main.py' | grep -v {my_pid} | xargs -r kill -9 2>/dev/null || true"],
-        capture_output=True
-    )
-    
-    # Small delay to let old instances fully die
-    import time
-    time.sleep(0.3)
-    
-    QApplication.setAttribute(Qt.AA_EnableHighDpiScaling, True)
-    QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps, True)
-    
-    app = QApplication(sys.argv)
-    app.setApplicationName("ZecNode")
-    app.setOrganizationName("ZecNode")
-    app.setDesktopFileName("zecnode")
-    app.setStyle("Fusion")
-    app.setStyleSheet(STYLESHEET)
-    
-    config = Config()
-    
-    # Check if already installed
-    if config.is_installed():
-        window = DashboardWindow(config)
-    else:
-        # Check if zebra container exists OR data directories exist
-        import shutil
-        
-        already_setup = False
-        
-        # Check 1: Zebra data directories exist on SSD AND have actual data
-        data_path = "/mnt/zebra-data"
-        cache_path = f"{data_path}/zebra-cache"
-        state_path = f"{data_path}/zebra-state"
-        
-        # Check if directories exist and are not empty
-        def has_data(path):
-            if not os.path.exists(path):
-                return False
-            try:
-                # Check if directory has more than just . and ..
-                contents = os.listdir(path)
-                return len(contents) > 0
-            except:
-                return False
-        
-        if has_data(cache_path) or has_data(state_path):
-            # Data exists! Mark as installed and go to dashboard
-            config.set("data_path", data_path)
-            config.set("install_phase", Config.PHASE_COMPLETE)
-            config.set("installed", True)
-            config.set("docker_configured", True)
-            config.save()
-            already_setup = True
-        
-        # Check 2: Zebra container exists
-        if not already_setup and shutil.which("docker"):
-            try:
-                result = subprocess.run(
-                    ["docker", "ps", "-a", "--filter", "name=zebra", "--format", "{{.Names}}"],
-                    capture_output=True, text=True, timeout=10
-                )
-                if "zebra" in result.stdout:
-                    # Node exists! Find where it's mounted
-                    mount_result = subprocess.run(
-                        ["docker", "inspect", "-f", "{{range .Mounts}}{{.Source}}{{end}}", "zebra"],
-                        capture_output=True, text=True, timeout=10
-                    )
-                    data_path = mount_result.stdout.strip() or "/mnt/zebra-data"
-                    
-                    # Create config and go straight to dashboard
-                    config.set_data_path(data_path)
-                    config.mark_installed()
-                    already_setup = True
-            except:
-                pass
-        
-        if already_setup:
-            window = DashboardWindow(config)
-        else:
-            # Show welcome dialog to select install type
-            welcome = WelcomeDialog()
-            result = welcome.exec_()
-            
-            if result == QDialog.Rejected:
-                sys.exit(0)
-            
-            selected_version = welcome.selected_version
-            config.set("zebra_version", selected_version)
-            config.save()
-            
-            window = InstallerWizard(config)
-    
-    window.show()
-    sys.exit(app.exec_())
-
-
-if __name__ == "__main__":
-    main()
-
-ENDOFFILE
-
-cat > config.py << 'ENDOFFILE'
 """
 ZecNode Configuration Management
 Handles persistent settings and installation state
@@ -4713,6 +4605,110 @@ class DashboardWindow(QMainWindow):
         event.accept()
         import os
         os._exit(0)
+
+
+def main():
+    # Kill any existing ZecNode instances (but not ourselves)
+    my_pid = os.getpid()
+    subprocess.run(
+        ["bash", "-c", f"pgrep -f 'python.*main.py' | grep -v {my_pid} | xargs -r kill -9 2>/dev/null || true"],
+        capture_output=True
+    )
+    
+    # Small delay to let old instances fully die
+    import time
+    time.sleep(0.3)
+    
+    QApplication.setAttribute(Qt.AA_EnableHighDpiScaling, True)
+    QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps, True)
+    
+    app = QApplication(sys.argv)
+    app.setApplicationName("ZecNode")
+    app.setOrganizationName("ZecNode")
+    app.setDesktopFileName("zecnode")
+    app.setStyle("Fusion")
+    app.setStyleSheet(STYLESHEET)
+    
+    config = Config()
+    
+    # Check if already installed
+    if config.is_installed():
+        window = DashboardWindow(config)
+    else:
+        # Check if zebra container exists OR data directories exist
+        import shutil
+        
+        already_setup = False
+        
+        # Check 1: Zebra data directories exist on SSD AND have actual data
+        data_path = "/mnt/zebra-data"
+        cache_path = f"{data_path}/zebra-cache"
+        state_path = f"{data_path}/zebra-state"
+        
+        # Check if directories exist and are not empty
+        def has_data(path):
+            if not os.path.exists(path):
+                return False
+            try:
+                # Check if directory has more than just . and ..
+                contents = os.listdir(path)
+                return len(contents) > 0
+            except:
+                return False
+        
+        if has_data(cache_path) or has_data(state_path):
+            # Data exists! Mark as installed and go to dashboard
+            config.set("data_path", data_path)
+            config.set("install_phase", Config.PHASE_COMPLETE)
+            config.set("installed", True)
+            config.set("docker_configured", True)
+            config.save()
+            already_setup = True
+        
+        # Check 2: Zebra container exists
+        if not already_setup and shutil.which("docker"):
+            try:
+                result = subprocess.run(
+                    ["docker", "ps", "-a", "--filter", "name=zebra", "--format", "{{.Names}}"],
+                    capture_output=True, text=True, timeout=10
+                )
+                if "zebra" in result.stdout:
+                    # Node exists! Find where it's mounted
+                    mount_result = subprocess.run(
+                        ["docker", "inspect", "-f", "{{range .Mounts}}{{.Source}}{{end}}", "zebra"],
+                        capture_output=True, text=True, timeout=10
+                    )
+                    data_path = mount_result.stdout.strip() or "/mnt/zebra-data"
+                    
+                    # Create config and go straight to dashboard
+                    config.set_data_path(data_path)
+                    config.mark_installed()
+                    already_setup = True
+            except:
+                pass
+        
+        if already_setup:
+            window = DashboardWindow(config)
+        else:
+            # Show welcome dialog to select install type
+            welcome = WelcomeDialog()
+            result = welcome.exec_()
+            
+            if result == QDialog.Rejected:
+                sys.exit(0)
+            
+            selected_version = welcome.selected_version
+            config.set("zebra_version", selected_version)
+            config.save()
+            
+            window = InstallerWizard(config)
+    
+    window.show()
+    sys.exit(app.exec_())
+
+
+if __name__ == "__main__":
+    main()
 
 ENDOFFILE
 
