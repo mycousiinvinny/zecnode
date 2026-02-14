@@ -388,6 +388,17 @@ def main():
         if already_setup:
             window = DashboardWindow(config)
         else:
+            # Show welcome dialog to select install type
+            welcome = WelcomeDialog()
+            result = welcome.exec_()
+            
+            if result == QDialog.Rejected:
+                sys.exit(0)
+            
+            selected_version = welcome.selected_version
+            config.set("zebra_version", selected_version)
+            config.save()
+            
             window = InstallerWizard(config)
     
     window.show()
@@ -580,7 +591,6 @@ class NodeManager:
     """Manages the Zcash node (Zebra) via Docker"""
     
     CONTAINER_NAME = "zebra"
-    IMAGE_NAME = "zfnd/zebra:3.1.0"
     MOUNT_PATH = "/mnt/zebra-data"
     
     # Lightwalletd
@@ -599,8 +609,10 @@ class NodeManager:
     # Zcash mainnet approximate current height
     ESTIMATED_TARGET_HEIGHT = 3_200_000
     
-    def __init__(self, data_path: Optional[Path] = None):
+    def __init__(self, data_path: Optional[Path] = None, zebra_version: str = "3.1.0"):
         self.data_path = data_path or Path(self.MOUNT_PATH)
+        self.zebra_version = zebra_version
+        self.IMAGE_NAME = f"zfnd/zebra:{zebra_version}"
     
     # ==================== SYSTEM CHECKS ====================
     
@@ -1787,8 +1799,7 @@ gsettings set org.gnome.desktop.session idle-delay 0 2>/dev/null || true
             
             # Create lightwalletd cache directory on SSD
             lwd_cache = "/mnt/zebra-data/lightwalletd"
-            subprocess.run(["sudo", "mkdir", "-p", lwd_cache], capture_output=True)
-            subprocess.run(["sudo", "chown", "-R", f"{os.getuid()}:{os.getgid()}", lwd_cache], capture_output=True)
+            os.makedirs(lwd_cache, exist_ok=True)
             
             # Start lightwalletd container on same network as Zebra
             # Uses container name 'zebra' for DNS resolution
@@ -2072,7 +2083,8 @@ class InstallerWizard(QMainWindow):
     def __init__(self, config: Config):
         super().__init__()
         self.config = config
-        self.node_manager = NodeManager()
+        zebra_version = config.get("zebra_version", "3.1.0")
+        self.node_manager = NodeManager(zebra_version=zebra_version)
         self.selected_drive: Optional[DriveInfo] = None
         self.worker = None
         self.drives = []
@@ -3182,6 +3194,115 @@ class StatusDot(QWidget):
         painter.drawEllipse(1, 1, 10, 10)
 
 
+class WelcomeDialog(QDialog):
+    """Welcome dialog to select install type - fresh or existing node"""
+    
+    def __init__(self):
+        super().__init__()
+        self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
+        self.setModal(True)
+        self.setFixedSize(500, 380)
+        self.setAttribute(Qt.WA_TranslucentBackground)
+        self.selected_version = "4.0.0"  # Default to latest
+        
+        # Main container
+        container = QFrame(self)
+        container.setGeometry(0, 0, 500, 380)
+        container.setStyleSheet("""
+            QFrame {
+                background-color: #1a1a24;
+                border: 1px solid #333;
+                border-radius: 15px;
+            }
+        """)
+        
+        # Close button (X) in top right
+        close_btn = QPushButton("✕", container)
+        close_btn.setGeometry(455, 10, 30, 30)
+        close_btn.setStyleSheet("""
+            QPushButton {
+                background-color: transparent;
+                border: none;
+                color: #666;
+                font-size: 18px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                color: #fff;
+            }
+        """)
+        close_btn.clicked.connect(self.reject)
+        
+        # Title
+        title_label = QLabel("Welcome to ZecNode", container)
+        title_label.setGeometry(0, 30, 500, 35)
+        title_label.setFont(QFont("Segoe UI", 16, QFont.Bold))
+        title_label.setStyleSheet("color: #f4b728; border: none; background: transparent;")
+        title_label.setAlignment(Qt.AlignCenter)
+        
+        # Subtitle
+        subtitle = QLabel("Select your situation:", container)
+        subtitle.setGeometry(0, 70, 500, 25)
+        subtitle.setStyleSheet("color: #888; font-size: 12px; border: none; background: transparent;")
+        subtitle.setAlignment(Qt.AlignCenter)
+        
+        # Button style
+        btn_style = """
+            QPushButton {
+                background-color: #2a2a3a;
+                border: 2px solid #333;
+                border-radius: 10px;
+                color: #e8e8e8;
+                font-size: 14px;
+                font-weight: bold;
+                text-align: left;
+                padding-left: 20px;
+            }
+            QPushButton:hover {
+                background-color: #3a3a4a;
+                border-color: #f4b728;
+            }
+        """
+        
+        # Fresh Install button
+        fresh_btn = QPushButton("🆕  Fresh Install", container)
+        fresh_btn.setGeometry(50, 110, 400, 60)
+        fresh_btn.setStyleSheet(btn_style)
+        fresh_btn.clicked.connect(lambda: self._select("4.0.0"))
+        
+        fresh_desc = QLabel("New setup, no existing Zcash node data", container)
+        fresh_desc.setGeometry(90, 160, 350, 20)
+        fresh_desc.setStyleSheet("color: #666; font-size: 11px; border: none; background: transparent;")
+        
+        # Existing 3.1.0 button
+        v31_btn = QPushButton("📦  Existing Zebra 3.1.0", container)
+        v31_btn.setGeometry(50, 190, 400, 60)
+        v31_btn.setStyleSheet(btn_style)
+        v31_btn.clicked.connect(lambda: self._select("3.1.0"))
+        
+        v31_desc = QLabel("I have a synced node running Zebra version 3.1.0", container)
+        v31_desc.setGeometry(90, 240, 350, 20)
+        v31_desc.setStyleSheet("color: #666; font-size: 11px; border: none; background: transparent;")
+        
+        # Existing 4.0.0 button
+        v40_btn = QPushButton("📦  Existing Zebra 4.0.0", container)
+        v40_btn.setGeometry(50, 270, 400, 60)
+        v40_btn.setStyleSheet(btn_style)
+        v40_btn.clicked.connect(lambda: self._select("4.0.0"))
+        
+        v40_desc = QLabel("I have a synced node running Zebra version 4.0.0", container)
+        v40_desc.setGeometry(90, 320, 350, 20)
+        v40_desc.setStyleSheet("color: #666; font-size: 11px; border: none; background: transparent;")
+        
+        # Center the dialog on screen
+        screen = QApplication.primaryScreen().geometry()
+        self.move((screen.width() - 500) // 2, (screen.height() - 380) // 2)
+    
+    def _select(self, version):
+        self.selected_version = version
+        self.accept()
+
+
 class ConfirmDialog(QDialog):
     """Custom styled confirmation dialog matching ZecNode theme"""
     
@@ -3437,10 +3558,11 @@ class UpdateThread(QThread):
     """Background thread for updates"""
     finished = pyqtSignal(bool, str)  # success, message
     
-    def __init__(self, update_type, data_path=None):
+    def __init__(self, update_type, data_path=None, zebra_version="3.1.0"):
         super().__init__()
         self.update_type = update_type
         self.data_path = data_path
+        self.zebra_version = zebra_version
     
     def run(self):
         import subprocess
@@ -3478,7 +3600,7 @@ class UpdateThread(QThread):
             elif self.update_type == "zebra":
                 # Pull latest image
                 result = subprocess.run(
-                    ["docker", "pull", "zfnd/zebra:3.1.0"],
+                    ["docker", "pull", f"zfnd/zebra:{self.zebra_version}"],
                     capture_output=True, text=True, timeout=300
                 )
                 if result.returncode != 0:
@@ -3542,7 +3664,7 @@ class UpdateThread(QThread):
                 # Add port mapping
                 docker_cmd.extend(["-p", "8233:8233"])
                 
-                docker_cmd.append("zfnd/zebra:3.1.0")
+                docker_cmd.append(f"zfnd/zebra:{self.zebra_version}")
                 
                 result = subprocess.run(docker_cmd, capture_output=True, text=True, timeout=30)
                 
@@ -3650,7 +3772,8 @@ class DashboardWindow(QMainWindow):
     def __init__(self, config: Config):
         super().__init__()
         self.config = config
-        self.node_manager = NodeManager(config.get_data_path())
+        zebra_version = config.get("zebra_version", "3.1.0")
+        self.node_manager = NodeManager(config.get_data_path(), zebra_version=zebra_version)
         self._centered = False
         self._drag_pos = None
         
@@ -4443,7 +4566,8 @@ class DashboardWindow(QMainWindow):
         self.update_dialog.show()
         
         data_path = self.config.get_data_path() if hasattr(self.config, 'get_data_path') else "/mnt/zcash"
-        self.update_thread = UpdateThread("zebra", data_path)
+        zebra_version = self.config.get("zebra_version", "3.1.0")
+        self.update_thread = UpdateThread("zebra", data_path, zebra_version)
         self.update_thread.finished.connect(self._on_update_done)
         self.update_thread.start()
     
