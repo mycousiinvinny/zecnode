@@ -333,12 +333,9 @@ def main():
     if config.is_installed():
         window = DashboardWindow(config)
     else:
-        # Check if zebra container exists OR data directories exist
+        # Check if zebra data directories exist on SSD AND have actual data
         import shutil
         
-        already_setup = False
-        
-        # Check 1: Zebra data directories exist on SSD AND have actual data
         data_path = "/mnt/zebra-data"
         cache_path = f"{data_path}/zebra-cache"
         state_path = f"{data_path}/zebra-state"
@@ -361,34 +358,9 @@ def main():
             config.set("installed", True)
             config.set("docker_configured", True)
             config.save()
-            already_setup = True
-        
-        # Check 2: Zebra container exists
-        if not already_setup and shutil.which("docker"):
-            try:
-                result = subprocess.run(
-                    ["docker", "ps", "-a", "--filter", "name=zebra", "--format", "{{.Names}}"],
-                    capture_output=True, text=True, timeout=10
-                )
-                if "zebra" in result.stdout:
-                    # Node exists! Find where it's mounted
-                    mount_result = subprocess.run(
-                        ["docker", "inspect", "-f", "{{range .Mounts}}{{.Source}}{{end}}", "zebra"],
-                        capture_output=True, text=True, timeout=10
-                    )
-                    data_path = mount_result.stdout.strip() or "/mnt/zebra-data"
-                    
-                    # Create config and go straight to dashboard
-                    config.set_data_path(data_path)
-                    config.mark_installed()
-                    already_setup = True
-            except:
-                pass
-        
-        if already_setup:
             window = DashboardWindow(config)
         else:
-            # Show welcome dialog to select install type
+            # No data found - show welcome dialog to select install type
             from dashboard import WelcomeDialog
             from PyQt5.QtWidgets import QDialog
             welcome = WelcomeDialog()
@@ -398,6 +370,10 @@ def main():
                 sys.exit(0)
             
             selected_version = welcome.selected_version
+            config.set("zebra_version", selected_version)
+            config.save()
+            
+            window = InstallerWizard(config)
             config.set("zebra_version", selected_version)
             config.save()
             
