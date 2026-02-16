@@ -1524,12 +1524,13 @@ gsettings set org.gnome.desktop.session idle-delay 0 2>/dev/null || true
             
             # Start container with volume mounts and RPC enabled
             # Environment variables enable RPC for lightwalletd support
+            # Zebra 4.0.0+ stores data in /home/zebra/.cache/zebra
             result = subprocess.run([
                 "docker", "run", "-d",
                 "--name", self.CONTAINER_NAME,
                 "--network", "zecnode",
-                "-v", f"{cache_path}:/var/cache/zebrad-cache",
-                "-v", f"{state_path}:/var/lib/zebrad",
+                "-v", f"{cache_path}:/home/zebra/.cache/zebra",
+                "-v", f"{state_path}:/home/zebra/.local/state/zebra",
                 "-p", "8233:8233",
                 "-e", "ZEBRA_RPC__LISTEN_ADDR=0.0.0.0:8232",
                 "-e", "ZEBRA_RPC__ENABLE_COOKIE_AUTH=false",
@@ -3608,10 +3609,10 @@ class UpdateThread(QThread):
                 
                 # Fallback if we couldn't get mounts
                 if not volume_mounts:
-                    data_path = self.data_path or "/mnt/zcash"
+                    data_path = self.data_path or "/mnt/zebra-data"
                     volume_mounts = [
-                        f"{data_path}/zebra-cache:/var/cache/zebrad-cache",
-                        f"{data_path}/zebra-state:/var/lib/zebrad"
+                        f"{data_path}/zebra-cache:/home/zebra/.cache/zebra",
+                        f"{data_path}/zebra-state:/home/zebra/.local/state/zebra"
                     ]
                 
                 # Check if container is running
