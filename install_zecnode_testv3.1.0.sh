@@ -333,51 +333,53 @@ def main():
     if config.is_installed():
         window = DashboardWindow(config)
     else:
-        # Check if zebra data directories exist on SSD AND have actual data
-        import shutil
-        
-        data_path = "/mnt/zebra-data"
-        cache_path = f"{data_path}/zebra-cache"
-        state_path = f"{data_path}/zebra-state"
-        
-        # Check if directories exist and are not empty
-        def has_data(path):
-            if not os.path.exists(path):
-                return False
-            try:
-                # Check if directory has more than just . and ..
-                contents = os.listdir(path)
-                return len(contents) > 0
-            except:
-                return False
-        
-        if has_data(cache_path) or has_data(state_path):
-            # Data exists! Mark as installed and go to dashboard
-            config.set("data_path", data_path)
-            config.set("install_phase", Config.PHASE_COMPLETE)
-            config.set("installed", True)
-            config.set("docker_configured", True)
-            config.save()
-            window = DashboardWindow(config)
+        # Check if we're in the middle of installation (e.g., after reboot)
+        phase = config.get_phase()
+        if phase not in [Config.PHASE_NOT_STARTED, Config.PHASE_COMPLETE]:
+            # Resume installation from where we left off
+            window = InstallerWizard(config)
         else:
-            # No data found - show welcome dialog to select install type
-            from dashboard import WelcomeDialog
-            from PyQt5.QtWidgets import QDialog
-            welcome = WelcomeDialog()
-            result = welcome.exec_()
+            # Check if zebra data directories exist on SSD AND have actual data
+            import shutil
             
-            if result == QDialog.Rejected:
-                sys.exit(0)
+            data_path = "/mnt/zebra-data"
+            cache_path = f"{data_path}/zebra-cache"
+            state_path = f"{data_path}/zebra-state"
             
-            selected_version = welcome.selected_version
-            config.set("zebra_version", selected_version)
-            config.save()
+            # Check if directories exist and are not empty
+            def has_data(path):
+                if not os.path.exists(path):
+                    return False
+                try:
+                    # Check if directory has more than just . and ..
+                    contents = os.listdir(path)
+                    return len(contents) > 0
+                except:
+                    return False
             
-            window = InstallerWizard(config)
-            config.set("zebra_version", selected_version)
-            config.save()
-            
-            window = InstallerWizard(config)
+            if has_data(cache_path) or has_data(state_path):
+                # Data exists! Mark as installed and go to dashboard
+                config.set("data_path", data_path)
+                config.set("install_phase", Config.PHASE_COMPLETE)
+                config.set("installed", True)
+                config.set("docker_configured", True)
+                config.save()
+                window = DashboardWindow(config)
+            else:
+                # No data found - show welcome dialog to select install type
+                from dashboard import WelcomeDialog
+                from PyQt5.QtWidgets import QDialog
+                welcome = WelcomeDialog()
+                result = welcome.exec_()
+                
+                if result == QDialog.Rejected:
+                    sys.exit(0)
+                
+                selected_version = welcome.selected_version
+                config.set("zebra_version", selected_version)
+                config.save()
+                
+                window = InstallerWizard(config)
     
     window.show()
     sys.exit(app.exec_())
