@@ -357,14 +357,27 @@ def main():
                 except:
                     return False
             
+            # Check if Docker and curl are installed
+            has_docker = shutil.which("docker") is not None
+            has_curl = shutil.which("curl") is not None
+            has_dependencies = has_docker and has_curl
+            
             if has_data(cache_path) or has_data(state_path):
-                # Data exists! Mark as installed and go to dashboard
-                config.set("data_path", data_path)
-                config.set("install_phase", Config.PHASE_COMPLETE)
-                config.set("installed", True)
-                config.set("docker_configured", True)
-                config.save()
-                window = DashboardWindow(config)
+                if has_dependencies:
+                    # Data exists and dependencies installed - go to dashboard
+                    config.set("data_path", data_path)
+                    config.set("install_phase", Config.PHASE_COMPLETE)
+                    config.set("installed", True)
+                    config.set("docker_configured", True)
+                    config.save()
+                    window = DashboardWindow(config)
+                else:
+                    # Data exists but missing dependencies - go to installer to install them
+                    # Skip format step since data exists
+                    config.set("data_path", data_path)
+                    config.set("has_existing_data", True)
+                    config.save()
+                    window = InstallerWizard(config)
             else:
                 # No data found - show welcome dialog to select install type
                 from dashboard import WelcomeDialog
@@ -2114,6 +2127,21 @@ class InstallerWizard(QMainWindow):
     def _check_resume(self):
         """Check if we need to resume installation from a previous phase"""
         phase = self.config.get_phase()
+        
+        # Check if we have existing data and just needed dependencies installed
+        has_existing_data = self.config.get("has_existing_data", False)
+        if has_existing_data and self.node_manager.check_docker_installed() and self.node_manager.check_curl_installed():
+            # Dependencies now installed, data exists - mark complete and go to dashboard
+            self.config.set("data_path", "/mnt/zebra-data")
+            self.config.mark_installed()
+            self.config.set("docker_configured", True)
+            self.config.save()
+            # Close installer and open dashboard
+            from dashboard import DashboardWindow
+            self.hide()
+            self.dashboard = DashboardWindow(self.config)
+            self.dashboard.show()
+            return
         
         # First, check actual system state - if Docker is installed but phase says not started,
         # skip to drive selection
