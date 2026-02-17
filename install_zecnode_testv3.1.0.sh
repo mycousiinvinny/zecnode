@@ -339,19 +339,96 @@ def main():
             # Resume installation from where we left off
             window = InstallerWizard(config)
         else:
-            # Check if zebra data directories exist on SSD AND have actual data
             import shutil
             
             data_path = "/mnt/zebra-data"
             cache_path = f"{data_path}/zebra-cache"
             state_path = f"{data_path}/zebra-state"
             
+            # Try to auto-mount SSD if not already mounted
+            def try_auto_mount():
+                """Try to find and mount an SSD with Zebra data"""
+                # Check if already mounted
+                if os.path.ismount(data_path):
+                    return True
+                
+                # Look for unmounted drives that might have Zebra data
+                try:
+                    # Get list of block devices
+                    result = subprocess.run(
+                        ["lsblk", "-rno", "NAME,TYPE,MOUNTPOINT"],
+                        capture_output=True, text=True, timeout=10
+                    )
+                    
+                    for line in result.stdout.strip().split('\n'):
+                        parts = line.split()
+                        if len(parts) >= 2:
+                            name, dtype = parts[0], parts[1]
+                            mountpoint = parts[2] if len(parts) > 2 else ""
+                            
+                            # Skip if not a partition or already mounted
+                            if dtype != "part" or mountpoint:
+                                continue
+                            
+                            device = f"/dev/{name}"
+                            
+                            # Try to mount temporarily and check for Zebra data
+                            temp_mount = "/tmp/zebra-check"
+                            try:
+                                subprocess.run(["sudo", "mkdir", "-p", temp_mount], capture_output=True, timeout=5)
+                                mount_result = subprocess.run(
+                                    ["sudo", "mount", "-o", "ro", device, temp_mount],
+                                    capture_output=True, timeout=10
+                                )
+                                
+                                if mount_result.returncode == 0:
+                                    # Check if this drive has Zebra data
+                                    has_zebra = os.path.exists(f"{temp_mount}/zebra-cache") and \
+                                                len(os.listdir(f"{temp_mount}/zebra-cache")) > 0
+                                    
+                                    subprocess.run(["sudo", "umount", temp_mount], capture_output=True, timeout=10)
+                                    
+                                    if has_zebra:
+                                        # Found it! Mount properly
+                                        subprocess.run(["sudo", "mkdir", "-p", data_path], capture_output=True, timeout=5)
+                                        mount_result = subprocess.run(
+                                            ["sudo", "mount", device, data_path],
+                                            capture_output=True, timeout=10
+                                        )
+                                        
+                                        if mount_result.returncode == 0:
+                                            # Add to fstab for persistence
+                                            uuid_result = subprocess.run(
+                                                ["sudo", "blkid", "-s", "UUID", "-o", "value", device],
+                                                capture_output=True, text=True, timeout=5
+                                            )
+                                            uuid = uuid_result.stdout.strip()
+                                            if uuid:
+                                                fstab_line = f"UUID={uuid} {data_path} ext4 defaults 0 2\n"
+                                                # Check if already in fstab
+                                                with open("/etc/fstab", "r") as f:
+                                                    if uuid not in f.read():
+                                                        subprocess.run(
+                                                            ["sudo", "bash", "-c", f"echo '{fstab_line}' >> /etc/fstab"],
+                                                            capture_output=True, timeout=5
+                                                        )
+                                            return True
+                            except:
+                                subprocess.run(["sudo", "umount", temp_mount], capture_output=True)
+                                continue
+                except:
+                    pass
+                
+                return False
+            
+            # Try to auto-mount if needed
+            try_auto_mount()
+            
             # Check if directories exist and are not empty
             def has_data(path):
                 if not os.path.exists(path):
                     return False
                 try:
-                    # Check if directory has more than just . and ..
                     contents = os.listdir(path)
                     return len(contents) > 0
                 except:
