@@ -306,6 +306,20 @@ QMenu::item:selected {
 
 
 def main():
+    # Check for --reset flag
+    if "--reset" in sys.argv:
+        import shutil
+        config_dir = os.path.expanduser("~/.zecnode")
+        cache_dir = os.path.expanduser("~/zecnode/__pycache__")
+        if os.path.exists(config_dir):
+            shutil.rmtree(config_dir)
+            print("Config reset.")
+        if os.path.exists(cache_dir):
+            shutil.rmtree(cache_dir)
+            print("Cache cleared.")
+        print("Restarting ZecNode...")
+        os.execv(sys.executable, [sys.executable, os.path.expanduser("~/zecnode/main.py")])
+    
     # Kill any existing ZecNode instances (but not ourselves)
     my_pid = os.getpid()
     subprocess.run(
@@ -4323,6 +4337,10 @@ class DashboardWindow(QMainWindow):
         
         menu.addSeparator()
         
+        reset_action = QAction("Reset ZecNode", self)
+        reset_action.triggered.connect(self._reset_zecnode)
+        menu.addAction(reset_action)
+        
         self.tray_toggle_dashboard = QAction("Hide Dashboard", self)
         self.tray_toggle_dashboard.triggered.connect(self._toggle_dashboard_from_menu)
         menu.addAction(self.tray_toggle_dashboard)
@@ -4778,6 +4796,30 @@ class DashboardWindow(QMainWindow):
     def _show_logs(self):
         dialog = LogsDialog(self, self.node_manager)
         dialog.exec_()
+    
+    def _reset_zecnode(self):
+        """Reset ZecNode config and restart"""
+        dialog = ConfirmDialog(
+            self,
+            "Reset ZecNode",
+            "This will reset all settings and restart ZecNode.\n\nYour node data will NOT be deleted.\n\nContinue?"
+        )
+        dialog.yes_btn.setText("Reset")
+        if dialog.exec_() == QDialog.Accepted:
+            import shutil
+            config_dir = os.path.expanduser("~/.zecnode")
+            cache_dir = os.path.expanduser("~/zecnode/__pycache__")
+            
+            # Remove config and cache
+            if os.path.exists(config_dir):
+                shutil.rmtree(config_dir)
+            if os.path.exists(cache_dir):
+                shutil.rmtree(cache_dir)
+            
+            # Restart ZecNode
+            self.tray.hide()
+            QApplication.processEvents()
+            os.execv(sys.executable, [sys.executable, os.path.expanduser("~/zecnode/main.py")])
     
     def _quit(self):
         dialog = ConfirmDialog(
