@@ -66,6 +66,4 @@ More nodes = more decentralization = stronger network. That's it.
 
 ## Beta Testing
 
-*curl -sSL https://raw.githubusercontent.com/mycousiinvinny/zecnode/main/install_zecnode_test.sh | bash*
-
-*curl -sSL https://raw.githubusercontent.com/mycousiinvinny/zecnode/main/install_zecnode_testv3.1.0.sh | bash* (use if running zebra v3.1.0)
+*curl -sSL https://raw.githubusercontent.com/mycousiinvinny/zecnode/main/install_zecnode.beta.sh | bash*
