@@ -4725,7 +4725,7 @@ class DashboardWindow(QMainWindow):
         self.update_dialog.show()
         
         data_path = self.config.get_data_path() if hasattr(self.config, 'get_data_path') else "/mnt/zcash"
-        zebra_version = self.config.get("zebra_version", "3.1.0")
+        zebra_version = "latest"
         self.update_thread = UpdateThread("zebra", data_path, zebra_version)
         self.update_thread.finished.connect(self._on_update_done)
         self.update_thread.start()
