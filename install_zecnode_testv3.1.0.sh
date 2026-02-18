@@ -4807,6 +4807,7 @@ class DashboardWindow(QMainWindow):
         dialog.yes_btn.setText("Reset")
         if dialog.exec_() == QDialog.Accepted:
             import shutil
+            import sys
             config_dir = os.path.expanduser("~/.zecnode")
             cache_dir = os.path.expanduser("~/zecnode/__pycache__")
             
