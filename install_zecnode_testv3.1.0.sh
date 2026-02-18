@@ -26,7 +26,7 @@ else
     # No config - check if this is actually a fresh system or an existing setup
     if command -v docker &> /dev/null; then
         # Docker exists but no config - check for zebra data
-        if [ -d "/mnt/zebra-data/zebra-state" ] && [ "$(ls -A /mnt/zebra-data/zebra-state 2>/dev/null)" ]; then
+        if [ -d "/mnt/zebra-data/zebra-cache" ] && [ "$(ls -A /mnt/zebra-data/zebra-cache 2>/dev/null)" ]; then
             echo "Existing Zebra data found - creating config..."
             mkdir -p "$HOME/.zecnode"
             cat > "$CONFIG_FILE" << 'CONFIGEOF'
@@ -37,7 +37,7 @@ else
   "docker_configured": true,
   "node_started": false,
   "autostart": false,
-  "zebra_version": "3.1.0",
+  "zebra_version": "4.0.0",
   "lightwalletd_enabled": false
 }
 CONFIGEOF
@@ -3750,11 +3750,17 @@ class UpdateThread(QThread):
                 # Remove old container
                 subprocess.run(["docker", "rm", "zebra"], capture_output=True, timeout=10)
                 
+                # Ensure zecnode network exists
+                subprocess.run(["docker", "network", "create", "zecnode"], capture_output=True)
+                
                 # Build docker run command with same mounts
                 docker_cmd = [
                     "docker", "run", "-d",
                     "--name", "zebra",
+                    "--network", "zecnode",
                     "--restart", "unless-stopped",
+                    "-e", "ZEBRA_RPC__LISTEN_ADDR=0.0.0.0:8232",
+                    "-e", "ZEBRA_RPC__ENABLE_COOKIE_AUTH=false",
                 ]
                 
                 # Add all volume mounts
