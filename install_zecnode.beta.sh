@@ -1826,27 +1826,39 @@ gsettings set org.gnome.desktop.session idle-delay 0 2>/dev/null || true
             return "--"
     
     def get_zebra_version(self) -> str:
-        """Get the Zebra version by querying the running container"""
+        """Get the Zebra version by querying the running container or image tag"""
         try:
             # First check if container is running
             result = subprocess.run(
                 ["docker", "ps", "-q", "-f", f"name={self.CONTAINER_NAME}"],
                 capture_output=True, text=True, timeout=5
             )
-            if not result.stdout.strip():
-                return "--"
             
-            # Query actual Zebra version
-            result = subprocess.run(
-                ["docker", "exec", self.CONTAINER_NAME, "zebrad", "--version"],
-                capture_output=True, text=True, timeout=10
-            )
-            if result.returncode == 0:
-                # Output is like "zebrad 4.1.0"
-                version_str = result.stdout.strip()
-                if "zebrad" in version_str:
-                    return version_str.replace("zebrad", "").strip()
-                return version_str
+            if result.stdout.strip():
+                # Container is running - query actual Zebra version
+                result = subprocess.run(
+                    ["docker", "exec", self.CONTAINER_NAME, "zebrad", "--version"],
+                    capture_output=True, text=True, timeout=10
+                )
+                if result.returncode == 0:
+                    # Output is like "zebrad 4.1.0"
+                    version_str = result.stdout.strip()
+                    if "zebrad" in version_str:
+                        return version_str.replace("zebrad", "").strip()
+                    return version_str
+            else:
+                # Container exists but stopped - check image tag
+                result = subprocess.run(
+                    ["docker", "inspect", "--format", "{{.Config.Image}}", self.CONTAINER_NAME],
+                    capture_output=True, text=True, timeout=5
+                )
+                if result.returncode == 0:
+                    image = result.stdout.strip()
+                    if ":" in image:
+                        tag = image.split(":")[-1]
+                        if tag != "latest":
+                            return tag
+                        return "latest"
         except:
             pass
         return "--"
