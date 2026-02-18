@@ -1826,17 +1826,27 @@ gsettings set org.gnome.desktop.session idle-delay 0 2>/dev/null || true
             return "--"
     
     def get_zebra_version(self) -> str:
-        """Get the Zebra version from the running container's image tag"""
+        """Get the Zebra version by querying the running container"""
         try:
+            # First check if container is running
             result = subprocess.run(
-                ["docker", "inspect", "--format", "{{.Config.Image}}", self.CONTAINER_NAME],
+                ["docker", "ps", "-q", "-f", f"name={self.CONTAINER_NAME}"],
                 capture_output=True, text=True, timeout=5
             )
+            if not result.stdout.strip():
+                return "--"
+            
+            # Query actual Zebra version
+            result = subprocess.run(
+                ["docker", "exec", self.CONTAINER_NAME, "zebrad", "--version"],
+                capture_output=True, text=True, timeout=10
+            )
             if result.returncode == 0:
-                image = result.stdout.strip()  # e.g., "zfnd/zebra:4.1.0" or "zfnd/zebra:latest"
-                if ":" in image:
-                    return image.split(":")[-1]
-                return "unknown"
+                # Output is like "zebrad 4.1.0"
+                version_str = result.stdout.strip()
+                if "zebrad" in version_str:
+                    return version_str.replace("zebrad", "").strip()
+                return version_str
         except:
             pass
         return "--"
