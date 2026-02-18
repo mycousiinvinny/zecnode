@@ -1825,6 +1825,22 @@ gsettings set org.gnome.desktop.session idle-delay 0 2>/dev/null || true
         except:
             return "--"
     
+    def get_zebra_version(self) -> str:
+        """Get the Zebra version from the running container's image tag"""
+        try:
+            result = subprocess.run(
+                ["docker", "inspect", "--format", "{{.Config.Image}}", self.CONTAINER_NAME],
+                capture_output=True, text=True, timeout=5
+            )
+            if result.returncode == 0:
+                image = result.stdout.strip()  # e.g., "zfnd/zebra:4.1.0" or "zfnd/zebra:latest"
+                if ":" in image:
+                    return image.split(":")[-1]
+                return "unknown"
+        except:
+            pass
+        return "--"
+    
     # ==================== LIGHTWALLETD ====================
     
     def get_local_ip(self) -> str:
@@ -3701,6 +3717,15 @@ class UpdateThread(QThread):
                 # Beta update - download from beta branch
                 home = os.path.expanduser("~")
                 zecnode_dir = os.path.join(home, "zecnode")
+                config_dir = os.path.join(home, ".zecnode")
+                cache_dir = os.path.join(zecnode_dir, "__pycache__")
+                
+                # Clear config and cache first
+                import shutil
+                if os.path.exists(config_dir):
+                    shutil.rmtree(config_dir)
+                if os.path.exists(cache_dir):
+                    shutil.rmtree(cache_dir)
                 
                 result = subprocess.run(
                     ["bash", "-c", f"""
@@ -3939,6 +3964,17 @@ class DashboardWindow(QMainWindow):
         self.cleanup_timer = QTimer()
         self.cleanup_timer.timeout.connect(self._cleanup_threads)
         self.cleanup_timer.start(3600000)  # 1 hour in milliseconds
+        
+        # Update Zebra version label
+        self._update_zebra_version()
+    
+    def _update_zebra_version(self):
+        """Update the Zebra version label"""
+        version = self.node_manager.get_zebra_version()
+        if version and version != "--":
+            self.zebra_version_label.setText(f"Zebra v{version}")
+        else:
+            self.zebra_version_label.setText("Zebra v--")
     
     def mousePressEvent(self, event):
         """Enable dragging the window"""
@@ -4010,6 +4046,10 @@ class DashboardWindow(QMainWindow):
         version_label = QLabel(f"v{VERSION}")
         version_label.setStyleSheet("color: #555; font-size: 10px; border: none; background: transparent;")
         title_section.addWidget(version_label)
+        
+        self.zebra_version_label = QLabel("Zebra v--")
+        self.zebra_version_label.setStyleSheet("color: #555; font-size: 10px; border: none; background: transparent;")
+        title_section.addWidget(self.zebra_version_label)
         
         header.addLayout(title_section)
         
@@ -4749,6 +4789,8 @@ class DashboardWindow(QMainWindow):
             else:
                 dialog = MessageDialog(self, "Update Complete", message, is_error=False)
                 dialog.exec_()
+                # Update Zebra version label after Zebra update
+                self._update_zebra_version()
         else:
             dialog = MessageDialog(self, "Update Failed", message, is_error=True)
             dialog.exec_()
