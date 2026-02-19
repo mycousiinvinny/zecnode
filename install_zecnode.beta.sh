@@ -4165,9 +4165,9 @@ class DashboardWindow(QMainWindow):
         sync_info.setStyleSheet("""
             QLabel {
                 color: #555;
-                font-size: 12px;
+                font-size: 11px;
                 border: none;
-                background: transparent;
+                background: #1e1e28;
                 padding-left: 4px;
             }
             QLabel:hover {
@@ -4243,10 +4243,14 @@ class DashboardWindow(QMainWindow):
         lwd_info = QLabel("ⓘ")
         lwd_info.setStyleSheet("""
             QLabel {
-                color: #888;
-                font-size: 16px;
+                color: #555;
+                font-size: 11px;
                 border: none;
-                background: transparent;
+                background: #1e1e28;
+                padding-left: 4px;
+            }
+            QLabel:hover {
+                color: #f4b728;
             }
             QToolTip {
                 background-color: #1a1a24;
