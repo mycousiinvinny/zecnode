@@ -4605,6 +4605,10 @@ class DashboardWindow(QMainWindow):
         if self._closing:
             return
         
+        # Skip UI update if an action is in progress (stop/start/restart)
+        if self._action_in_progress:
+            return
+        
         # Status - check internet first, then running state
         if status.running and not has_internet:
             # Node is running but no internet
