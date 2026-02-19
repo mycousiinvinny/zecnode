@@ -4574,14 +4574,16 @@ class DashboardWindow(QMainWindow):
             self._update_tray_icon("running")
             # Update Zebra version if it shows "latest" or "--"
             current = self.zebra_version_label.text()
-            if "latest" in current or "--" in current:
+            if "latest" in current or "--" in current or not self.zebra_version_label.isVisible():
                 self._update_zebra_version()
+            self.zebra_version_label.setVisible(True)
         else:
             # Node is stopped
             self.status_dot.set_state(StatusDot.STATE_STOPPED)
             self.status_text.setText("Stopped")
             self.status_text.setStyleSheet("color: #ef4444; border: none; background: transparent;")
             self._update_tray_icon("stopped")
+            self.zebra_version_label.setVisible(False)
         
         # Stats (only updated when online)
         self.peers_card.set_value(str(status.peer_count))
