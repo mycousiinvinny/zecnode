@@ -1825,8 +1825,8 @@ gsettings set org.gnome.desktop.session idle-delay 0 2>/dev/null || true
         except:
             return "--"
     
-    def get_zebra_version(self) -> str:
-        """Get the Zebra version by querying the running container or image tag"""
+    def get_zebra_version(self, config=None) -> str:
+        """Get the Zebra version by querying the running container, or from saved config"""
         try:
             # First check if container is running
             result = subprocess.run(
@@ -1844,10 +1844,22 @@ gsettings set org.gnome.desktop.session idle-delay 0 2>/dev/null || true
                     # Output is like "zebrad 4.1.0"
                     version_str = result.stdout.strip()
                     if "zebrad" in version_str:
-                        return version_str.replace("zebrad", "").strip()
-                    return version_str
+                        version = version_str.replace("zebrad", "").strip()
+                    else:
+                        version = version_str
+                    # Save to config for when stopped
+                    if config and version and version != "--":
+                        config.set("zebra_actual_version", version)
+                        config.save()
+                    return version
             else:
-                # Container exists but stopped - check image tag
+                # Container stopped - try saved version from config first
+                if config:
+                    saved_version = config.get("zebra_actual_version")
+                    if saved_version:
+                        return saved_version
+                
+                # Fall back to image tag
                 result = subprocess.run(
                     ["docker", "inspect", "--format", "{{.Config.Image}}", self.CONTAINER_NAME],
                     capture_output=True, text=True, timeout=5
@@ -3992,7 +4004,7 @@ class DashboardWindow(QMainWindow):
     
     def _update_zebra_version(self):
         """Update the Zebra version label"""
-        version = self.node_manager.get_zebra_version()
+        version = self.node_manager.get_zebra_version(self.config)
         if version and version != "--":
             self.zebra_version_label.setText(f"Zebra v{version}")
         else:
@@ -4560,6 +4572,10 @@ class DashboardWindow(QMainWindow):
             self.status_text.setText("Running")
             self.status_text.setStyleSheet("color: #4ade80; border: none; background: transparent;")
             self._update_tray_icon("running")
+            # Update Zebra version if it shows "latest" or "--"
+            current = self.zebra_version_label.text()
+            if "latest" in current or "--" in current:
+                self._update_zebra_version()
         else:
             # Node is stopped
             self.status_dot.set_state(StatusDot.STATE_STOPPED)
