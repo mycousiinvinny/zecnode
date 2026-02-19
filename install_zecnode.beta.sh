@@ -349,6 +349,24 @@ def main():
     else:
         # Check if we're in the middle of installation (e.g., after reboot)
         phase = config.get_phase()
+        
+        # Check if we have existing data and just needed dependencies
+        has_existing_data = config.get("has_existing_data", False)
+        if has_existing_data:
+            import shutil
+            has_docker = shutil.which("docker") is not None
+            has_curl = shutil.which("curl") is not None
+            if has_docker and has_curl:
+                # Dependencies installed, data exists - go straight to dashboard
+                config.set("data_path", "/mnt/zebra-data")
+                config.set("install_phase", Config.PHASE_COMPLETE)
+                config.set("installed", True)
+                config.set("docker_configured", True)
+                config.save()
+                window = DashboardWindow(config)
+                window.show()
+                sys.exit(app.exec_())
+        
         if phase not in [Config.PHASE_NOT_STARTED, Config.PHASE_COMPLETE]:
             # Resume installation from where we left off
             window = InstallerWizard(config)
