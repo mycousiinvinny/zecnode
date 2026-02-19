@@ -3998,9 +3998,6 @@ class DashboardWindow(QMainWindow):
         self.cleanup_timer = QTimer()
         self.cleanup_timer.timeout.connect(self._cleanup_threads)
         self.cleanup_timer.start(3600000)  # 1 hour in milliseconds
-        
-        # Update Zebra version label
-        self._update_zebra_version()
     
     def _update_zebra_version(self):
         """Update the Zebra version label"""
@@ -4083,6 +4080,7 @@ class DashboardWindow(QMainWindow):
         
         self.zebra_version_label = QLabel("Zebra v--")
         self.zebra_version_label.setStyleSheet("color: #555; font-size: 10px; border: none; background: transparent;")
+        self.zebra_version_label.setVisible(False)  # Hidden until node confirmed running
         title_section.addWidget(self.zebra_version_label)
         
         header.addLayout(title_section)
