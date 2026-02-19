@@ -4160,6 +4160,28 @@ class DashboardWindow(QMainWindow):
         sync_label = QLabel("Sync Progress")
         sync_label.setStyleSheet("color: #888; font-size: 11px; border: none; background: transparent;")
         sync_header.addWidget(sync_label)
+        
+        sync_info = QLabel("ⓘ")
+        sync_info.setStyleSheet("""
+            QLabel {
+                color: #555;
+                font-size: 12px;
+                border: none;
+                background: transparent;
+                padding-left: 4px;
+            }
+            QLabel:hover {
+                color: #f4b728;
+            }
+        """)
+        sync_info.setToolTip(
+            "If sync shows 0%, don't worry — your data is safe.\n\n"
+            "After starting or updating, the node needs a moment\n"
+            "to verify existing data before syncing resumes.\n\n"
+            "Check 'Logs' for block heights to confirm progress."
+        )
+        sync_header.addWidget(sync_info)
+        
         sync_header.addStretch()
         self.sync_percent_label = QLabel("0%")
         self.sync_percent_label.setStyleSheet("color: #fff; font-size: 11px; font-weight: bold; border: none; background: transparent;")
