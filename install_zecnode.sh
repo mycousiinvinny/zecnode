@@ -3882,6 +3882,7 @@ class DashboardWindow(QMainWindow):
         self.timer.timeout.connect(self._start_refresh)
         self.timer.start(3000)  # 3 seconds
         self._action_in_progress = False
+        self._lwd_action_in_progress = False
         self._closing = False
         self.refresh_thread = None
         self._start_refresh()
@@ -4578,6 +4579,10 @@ class DashboardWindow(QMainWindow):
             self.node_manager.stop_lightwalletd()
             lwd_running = False
         
+        # Skip lwd UI update if action in progress
+        if self._lwd_action_in_progress:
+            return
+        
         # Update UI
         if lwd_running:
             self.lwd_toggle.setChecked(True)
@@ -4790,6 +4795,7 @@ class DashboardWindow(QMainWindow):
                 return
             
             # Start lightwalletd in background thread
+            self._lwd_action_in_progress = True
             self.lwd_toggle.setText("...")
             self.lwd_toggle.setEnabled(False)
             self.lwd_status.setText("Starting...")
@@ -4800,6 +4806,7 @@ class DashboardWindow(QMainWindow):
                 return success, msg
             
             def on_start_done(result):
+                self._lwd_action_in_progress = False
                 success, msg = result
                 if success:
                     self.lwd_toggle.setText("ON")
@@ -4818,6 +4825,7 @@ class DashboardWindow(QMainWindow):
             self._run_in_thread(start_lwd, on_start_done)
         else:
             # Stop lightwalletd in background thread
+            self._lwd_action_in_progress = True
             self.lwd_toggle.setText("...")
             self.lwd_toggle.setEnabled(False)
             self.lwd_status.setText("Stopping...")
@@ -4828,6 +4836,7 @@ class DashboardWindow(QMainWindow):
                 return True
             
             def on_stop_done(result):
+                self._lwd_action_in_progress = False
                 self.lwd_toggle.setText("OFF")
                 self.lwd_toggle.setEnabled(True)
                 self.lwd_status.setText("Off")
