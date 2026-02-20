@@ -513,7 +513,7 @@ import json
 from pathlib import Path
 from typing import Optional
 
-VERSION = "1.0.5"
+VERSION = "2.0.0"
 
 
 class Config:
@@ -3880,7 +3880,7 @@ class DashboardWindow(QMainWindow):
         
         self.timer = QTimer()
         self.timer.timeout.connect(self._start_refresh)
-        self.timer.start(5000)  # 5 seconds - reduces thread buildup
+        self.timer.start(3000)  # 3 seconds
         self._action_in_progress = False
         self._closing = False
         self.refresh_thread = None
@@ -3896,7 +3896,7 @@ class DashboardWindow(QMainWindow):
         # Cleanup timer - garbage collect every hour to prevent zombie thread buildup
         self.cleanup_timer = QTimer()
         self.cleanup_timer.timeout.connect(self._cleanup_threads)
-        self.cleanup_timer.start(3600000)  # 1 hour in milliseconds
+        self.cleanup_timer.start(1800000)  # 30 minutes
     
     def _update_zebra_version(self):
         """Update the Zebra version label"""
@@ -4903,14 +4903,12 @@ class DashboardWindow(QMainWindow):
         dialog.yes_btn.setText("Quit")
         if dialog.exec_() == QDialog.Accepted:
             self.tray.hide()
-            QApplication.processEvents()
             import os
             os._exit(0)
     
     def closeEvent(self, event):
-        # Hide tray and close
+        # Hide tray and close immediately
         self.tray.hide()
-        QApplication.processEvents()
         event.accept()
         import os
         os._exit(0)
