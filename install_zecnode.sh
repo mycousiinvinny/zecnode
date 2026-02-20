@@ -11,6 +11,40 @@ PROJECT_DIR="$HOME/zecnode"
 mkdir -p "$PROJECT_DIR"
 cd "$PROJECT_DIR"
 
+# Always clear Python cache to avoid stale bytecode issues
+rm -rf "$PROJECT_DIR/__pycache__" 2>/dev/null || true
+
+# Smart config handling - detect actual system state
+CONFIG_FILE="$HOME/.zecnode/config.json"
+if [ -f "$CONFIG_FILE" ]; then
+    # Config exists - check if it matches reality
+    if ! command -v docker &> /dev/null; then
+        echo "Docker not found but config exists - resetting for fresh install..."
+        rm -f "$CONFIG_FILE" 2>/dev/null || true
+    fi
+else
+    # No config - check if this is actually a fresh system or an existing setup
+    if command -v docker &> /dev/null; then
+        # Docker exists but no config - check for zebra data
+        if [ -d "/mnt/zebra-data/zebra-cache" ] && [ "$(ls -A /mnt/zebra-data/zebra-cache 2>/dev/null)" ]; then
+            echo "Existing Zebra data found - creating config..."
+            mkdir -p "$HOME/.zecnode"
+            cat > "$CONFIG_FILE" << 'CONFIGEOF'
+{
+  "installed": true,
+  "install_phase": "complete",
+  "data_path": "/mnt/zebra-data",
+  "docker_configured": true,
+  "node_started": false,
+  "autostart": false,
+  "zebra_version": "4.0.0",
+  "lightwalletd_enabled": false
+}
+CONFIGEOF
+        fi
+    fi
+fi
+
 # Download ZecNode icon
 echo "Downloading icon..."
 curl -sSL -o "$PROJECT_DIR/zecnode-icon.png" "https://raw.githubusercontent.com/mycousiinvinny/zecnode/main/zecnode-icon.png" 2>/dev/null || true
@@ -83,11 +117,12 @@ QMainWindow, QDialog {
 
 /* Tooltips */
 QToolTip {
-    background-color: #2a2a3a;
-    color: #e8e8e8;
-    border: 1px solid #444;
-    padding: 5px;
-    border-radius: 4px;
+    background-color: #1a1a24;
+    color: #ffffff;
+    border: 2px solid #4ade80;
+    padding: 12px;
+    border-radius: 8px;
+    font-size: 13px;
 }
 
 /* Labels */
@@ -271,6 +306,20 @@ QMenu::item:selected {
 
 
 def main():
+    # Check for --reset flag
+    if "--reset" in sys.argv:
+        import shutil
+        config_dir = os.path.expanduser("~/.zecnode")
+        cache_dir = os.path.expanduser("~/zecnode/__pycache__")
+        if os.path.exists(config_dir):
+            shutil.rmtree(config_dir)
+            print("Config reset.")
+        if os.path.exists(cache_dir):
+            shutil.rmtree(cache_dir)
+            print("Cache cleared.")
+        print("Restarting ZecNode...")
+        os.execv(sys.executable, [sys.executable, os.path.expanduser("~/zecnode/main.py")])
+    
     # Kill any existing ZecNode instances (but not ourselves)
     my_pid = os.getpid()
     subprocess.run(
@@ -298,33 +347,151 @@ def main():
     if config.is_installed():
         window = DashboardWindow(config)
     else:
-        # Check if zebra container already exists (user set up node manually)
-        import shutil
+        # Check if we're in the middle of installation (e.g., after reboot)
+        phase = config.get_phase()
         
-        if shutil.which("docker"):
-            try:
-                result = subprocess.run(
-                    ["docker", "ps", "-a", "--filter", "name=zebra", "--format", "{{.Names}}"],
-                    capture_output=True, text=True, timeout=10
-                )
-                if "zebra" in result.stdout:
-                    # Node exists! Find where it's mounted
-                    mount_result = subprocess.run(
-                        ["docker", "inspect", "-f", "{{range .Mounts}}{{.Source}}{{end}}", "zebra"],
+        # Check if we have existing data and just needed dependencies
+        has_existing_data = config.get("has_existing_data", False)
+        if has_existing_data:
+            import shutil
+            has_docker = shutil.which("docker") is not None
+            has_curl = shutil.which("curl") is not None
+            if has_docker and has_curl:
+                # Dependencies installed, data exists - go straight to dashboard
+                config.set("data_path", "/mnt/zebra-data")
+                config.set("install_phase", Config.PHASE_COMPLETE)
+                config.set("installed", True)
+                config.set("docker_configured", True)
+                config.save()
+                window = DashboardWindow(config)
+                window.show()
+                sys.exit(app.exec_())
+        
+        if phase not in [Config.PHASE_NOT_STARTED, Config.PHASE_COMPLETE]:
+            # Resume installation from where we left off
+            window = InstallerWizard(config)
+        else:
+            import shutil
+            
+            data_path = "/mnt/zebra-data"
+            cache_path = f"{data_path}/zebra-cache"
+            state_path = f"{data_path}/zebra-state"
+            
+            # Try to auto-mount SSD if not already mounted
+            def try_auto_mount():
+                """Try to find and mount an SSD with Zebra data"""
+                # Check if already mounted
+                if os.path.ismount(data_path):
+                    return True
+                
+                # Look for unmounted drives that might have Zebra data
+                try:
+                    # Get list of block devices
+                    result = subprocess.run(
+                        ["lsblk", "-rno", "NAME,TYPE,MOUNTPOINT"],
                         capture_output=True, text=True, timeout=10
                     )
-                    data_path = mount_result.stdout.strip() or "/mnt/zcash"
                     
-                    # Create config and go straight to dashboard
-                    config.set_data_path(data_path)
-                    config.mark_installed()
+                    for line in result.stdout.strip().split('\n'):
+                        parts = line.split()
+                        if len(parts) >= 2:
+                            name, dtype = parts[0], parts[1]
+                            mountpoint = parts[2] if len(parts) > 2 else ""
+                            
+                            # Skip if not a partition or already mounted
+                            if dtype != "part" or mountpoint:
+                                continue
+                            
+                            device = f"/dev/{name}"
+                            
+                            # Try to mount temporarily and check for Zebra data
+                            temp_mount = "/tmp/zebra-check"
+                            try:
+                                subprocess.run(["sudo", "mkdir", "-p", temp_mount], capture_output=True, timeout=5)
+                                mount_result = subprocess.run(
+                                    ["sudo", "mount", "-o", "ro", device, temp_mount],
+                                    capture_output=True, timeout=10
+                                )
+                                
+                                if mount_result.returncode == 0:
+                                    # Check if this drive has Zebra data
+                                    has_zebra = os.path.exists(f"{temp_mount}/zebra-cache") and \
+                                                len(os.listdir(f"{temp_mount}/zebra-cache")) > 0
+                                    
+                                    subprocess.run(["sudo", "umount", temp_mount], capture_output=True, timeout=10)
+                                    
+                                    if has_zebra:
+                                        # Found it! Mount properly
+                                        subprocess.run(["sudo", "mkdir", "-p", data_path], capture_output=True, timeout=5)
+                                        mount_result = subprocess.run(
+                                            ["sudo", "mount", device, data_path],
+                                            capture_output=True, timeout=10
+                                        )
+                                        
+                                        if mount_result.returncode == 0:
+                                            # Add to fstab for persistence
+                                            uuid_result = subprocess.run(
+                                                ["sudo", "blkid", "-s", "UUID", "-o", "value", device],
+                                                capture_output=True, text=True, timeout=5
+                                            )
+                                            uuid = uuid_result.stdout.strip()
+                                            if uuid:
+                                                fstab_line = f"UUID={uuid} {data_path} ext4 defaults 0 2\n"
+                                                # Check if already in fstab
+                                                with open("/etc/fstab", "r") as f:
+                                                    if uuid not in f.read():
+                                                        subprocess.run(
+                                                            ["sudo", "bash", "-c", f"echo '{fstab_line}' >> /etc/fstab"],
+                                                            capture_output=True, timeout=5
+                                                        )
+                                            return True
+                            except:
+                                subprocess.run(["sudo", "umount", temp_mount], capture_output=True)
+                                continue
+                except:
+                    pass
+                
+                return False
+            
+            # Try to auto-mount if needed
+            try_auto_mount()
+            
+            # Check if directories exist and are not empty
+            def has_data(path):
+                if not os.path.exists(path):
+                    return False
+                try:
+                    contents = os.listdir(path)
+                    return len(contents) > 0
+                except:
+                    return False
+            
+            # Check if Docker and curl are installed
+            has_docker = shutil.which("docker") is not None
+            has_curl = shutil.which("curl") is not None
+            has_dependencies = has_docker and has_curl
+            
+            if has_data(cache_path) or has_data(state_path):
+                if has_dependencies:
+                    # Data exists and dependencies installed - go to dashboard
+                    config.set("data_path", data_path)
+                    config.set("install_phase", Config.PHASE_COMPLETE)
+                    config.set("installed", True)
+                    config.set("docker_configured", True)
+                    config.save()
                     window = DashboardWindow(config)
                 else:
+                    # Data exists but missing dependencies - go to installer to install them
+                    # Skip format step since data exists
+                    config.set("data_path", data_path)
+                    config.set("has_existing_data", True)
+                    config.save()
                     window = InstallerWizard(config)
-            except:
+            else:
+                # No data found - go straight to installer with latest version
+                config.set("zebra_version", "latest")
+                config.save()
                 window = InstallerWizard(config)
-        else:
-            window = InstallerWizard(config)
     
     window.show()
     sys.exit(app.exec_())
@@ -346,7 +513,7 @@ import json
 from pathlib import Path
 from typing import Optional
 
-VERSION = "1.0.5"
+VERSION = "2.0.0"
 
 
 class Config:
@@ -375,6 +542,7 @@ class Config:
         "node_started": False,
         "autostart": False,
         "zebra_version": "latest",
+        "lightwalletd_enabled": False,
     }
     
     def __init__(self):
@@ -515,8 +683,12 @@ class NodeManager:
     """Manages the Zcash node (Zebra) via Docker"""
     
     CONTAINER_NAME = "zebra"
-    IMAGE_NAME = "zfnd/zebra:latest"
     MOUNT_PATH = "/mnt/zebra-data"
+    
+    # Lightwalletd
+    LWD_CONTAINER_NAME = "lightwalletd"
+    LWD_IMAGE_NAME = "mycousiinvinny/lightwalletd:arm64"
+    LWD_PORT = 9067
     
     # Directory structure on SSD
     # Step 6: sudo mkdir -p /mnt/zebra-data/{docker,containerd}
@@ -529,8 +701,10 @@ class NodeManager:
     # Zcash mainnet approximate current height
     ESTIMATED_TARGET_HEIGHT = 3_200_000
     
-    def __init__(self, data_path: Optional[Path] = None):
+    def __init__(self, data_path: Optional[Path] = None, zebra_version: str = "3.1.0"):
         self.data_path = data_path or Path(self.MOUNT_PATH)
+        self.zebra_version = zebra_version
+        self.IMAGE_NAME = f"zfnd/zebra:{zebra_version}"
     
     # ==================== SYSTEM CHECKS ====================
     
@@ -1362,7 +1536,7 @@ gsettings set org.gnome.desktop.session idle-delay 0 2>/dev/null || true
     def pull_zebra_image(self, progress_callback=None) -> Tuple[bool, str]:
         """
         Step:
-            docker pull zfnd/zebra:latest
+            docker pull zfnd/zebra:3.1.0
         """
         if progress_callback:
             progress_callback("Downloading Zebra image (this may take a while)...")
@@ -1456,13 +1630,24 @@ gsettings set org.gnome.desktop.session idle-delay 0 2>/dev/null || true
                 capture_output=True
             )
             
-            # Start container with volume mounts
+            # Ensure zecnode network exists
+            subprocess.run(
+                ["docker", "network", "create", "zecnode"],
+                capture_output=True
+            )
+            
+            # Start container with volume mounts and RPC enabled
+            # Environment variables enable RPC for lightwalletd support
+            # Zebra 4.0.0+ stores data in /home/zebra/.cache/zebra
             result = subprocess.run([
                 "docker", "run", "-d",
                 "--name", self.CONTAINER_NAME,
-                "-v", f"{cache_path}:/var/cache/zebrad-cache",
-                "-v", f"{state_path}:/var/lib/zebrad",
+                "--network", "zecnode",
+                "-v", f"{cache_path}:/home/zebra/.cache/zebra",
+                "-v", f"{state_path}:/home/zebra/.local/state/zebra",
                 "-p", "8233:8233",
+                "-e", "ZEBRA_RPC__LISTEN_ADDR=0.0.0.0:8232",
+                "-e", "ZEBRA_RPC__ENABLE_COOKIE_AUTH=false",
                 "--restart", "unless-stopped",
                 self.IMAGE_NAME
             ], capture_output=True, text=True)
@@ -1647,6 +1832,169 @@ gsettings set org.gnome.desktop.session idle-delay 0 2>/dev/null || true
                 return f"{minutes}m"
         except:
             return "--"
+    
+    def get_zebra_version(self, config=None) -> str:
+        """Get the Zebra version by querying the running container, or from saved config"""
+        try:
+            # First check if container is running
+            result = subprocess.run(
+                ["docker", "ps", "-q", "-f", f"name={self.CONTAINER_NAME}"],
+                capture_output=True, text=True, timeout=5
+            )
+            
+            if result.stdout.strip():
+                # Container is running - query actual Zebra version
+                result = subprocess.run(
+                    ["docker", "exec", self.CONTAINER_NAME, "zebrad", "--version"],
+                    capture_output=True, text=True, timeout=10
+                )
+                if result.returncode == 0:
+                    # Output is like "zebrad 4.1.0"
+                    version_str = result.stdout.strip()
+                    if "zebrad" in version_str:
+                        version = version_str.replace("zebrad", "").strip()
+                    else:
+                        version = version_str
+                    # Save to config for when stopped
+                    if config and version and version != "--":
+                        config.set("zebra_actual_version", version)
+                        config.save()
+                    return version
+            else:
+                # Container stopped - try saved version from config first
+                if config:
+                    saved_version = config.get("zebra_actual_version")
+                    if saved_version:
+                        return saved_version
+                
+                # Fall back to image tag
+                result = subprocess.run(
+                    ["docker", "inspect", "--format", "{{.Config.Image}}", self.CONTAINER_NAME],
+                    capture_output=True, text=True, timeout=5
+                )
+                if result.returncode == 0:
+                    image = result.stdout.strip()
+                    if ":" in image:
+                        tag = image.split(":")[-1]
+                        if tag != "latest":
+                            return tag
+                        return "latest"
+        except:
+            pass
+        return "--"
+    
+    # ==================== LIGHTWALLETD ====================
+    
+    def get_local_ip(self) -> str:
+        """Get the local IP address of this machine"""
+        try:
+            import socket
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            s.connect(("8.8.8.8", 80))
+            ip = s.getsockname()[0]
+            s.close()
+            return ip
+        except:
+            return "127.0.0.1"
+    
+    def is_lightwalletd_running(self) -> bool:
+        """Check if lightwalletd container is running"""
+        try:
+            result = subprocess.run(
+                ["docker", "ps", "-q", "-f", f"name={self.LWD_CONTAINER_NAME}"],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+            return bool(result.stdout.strip())
+        except:
+            return False
+    
+    def start_lightwalletd(self) -> Tuple[bool, str]:
+        """Start lightwalletd container"""
+        try:
+            # Check if Zebra is running first
+            status = self.get_status()
+            if not status.running:
+                return False, "Zebra must be running first"
+            
+            # Check if already running
+            if self.is_lightwalletd_running():
+                return True, "Lightwalletd already running"
+            
+            # Remove any existing stopped container
+            subprocess.run(
+                ["docker", "rm", "-f", self.LWD_CONTAINER_NAME],
+                capture_output=True
+            )
+            
+            # Ensure zecnode network exists
+            subprocess.run(
+                ["docker", "network", "create", "zecnode"],
+                capture_output=True
+            )
+            
+            # Create zcash.conf for lightwalletd (it just needs rpcbind and rpcport)
+            conf_dir = Path.home() / ".zecnode"
+            conf_dir.mkdir(exist_ok=True)
+            conf_file = conf_dir / "zcash.conf"
+            conf_file.write_text(f"rpcbind={self.CONTAINER_NAME}\nrpcport=8232\nrpcuser=zecnode\nrpcpassword=zecnode\n")
+            
+            # Create lightwalletd cache directory on SSD
+            lwd_cache = "/mnt/zebra-data/lightwalletd"
+            os.makedirs(lwd_cache, exist_ok=True)
+            
+            # Start lightwalletd container on same network as Zebra
+            # Uses container name 'zebra' for DNS resolution
+            result = subprocess.run([
+                "docker", "run", "-d",
+                "--name", self.LWD_CONTAINER_NAME,
+                "--network", "zecnode",
+                "-p", f"{self.LWD_PORT}:9067",
+                "-v", f"{conf_file}:/app/zcash.conf:ro",
+                "-v", f"{lwd_cache}:/var/lib/lightwalletd",
+                "--restart", "unless-stopped",
+                self.LWD_IMAGE_NAME,
+                "--zcash-conf-path", "/app/zcash.conf",
+                "--data-dir", "/var/lib/lightwalletd",
+                "--grpc-bind-addr", "0.0.0.0:9067",
+                "--no-tls-very-insecure",
+                "--log-file", "/dev/stdout"
+            ], capture_output=True, text=True, timeout=120)
+            
+            if result.returncode != 0:
+                return False, f"Failed to start lightwalletd: {result.stderr}"
+            
+            return True, "Lightwalletd started"
+            
+        except subprocess.TimeoutExpired:
+            return False, "Timeout starting lightwalletd"
+        except Exception as e:
+            return False, f"Error: {str(e)}"
+        except Exception as e:
+            return False, f"Error: {str(e)}"
+    
+    def stop_lightwalletd(self) -> Tuple[bool, str]:
+        """Stop lightwalletd container"""
+        try:
+            result = subprocess.run(
+                ["docker", "stop", "-t", "3", self.LWD_CONTAINER_NAME],
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+            # Also remove container
+            subprocess.run(
+                ["docker", "rm", "-f", self.LWD_CONTAINER_NAME],
+                capture_output=True
+            )
+            return True, "Lightwalletd stopped"
+        except Exception as e:
+            return False, f"Error: {str(e)}"
+    
+    def get_lightwalletd_url(self) -> str:
+        """Get the lightwalletd gRPC URL"""
+        return f"http://{self.get_local_ip()}:{self.LWD_PORT}"
 
 ENDOFFILE
 
@@ -1878,7 +2226,8 @@ class InstallerWizard(QMainWindow):
     def __init__(self, config: Config):
         super().__init__()
         self.config = config
-        self.node_manager = NodeManager()
+        zebra_version = config.get("zebra_version", "3.1.0")
+        self.node_manager = NodeManager(zebra_version=zebra_version)
         self.selected_drive: Optional[DriveInfo] = None
         self.worker = None
         self.drives = []
@@ -1928,7 +2277,29 @@ class InstallerWizard(QMainWindow):
         """Check if we need to resume installation from a previous phase"""
         phase = self.config.get_phase()
         
+        # Check if we have existing data and just needed dependencies installed
+        has_existing_data = self.config.get("has_existing_data", False)
+        if has_existing_data and self.node_manager.check_docker_installed() and self.node_manager.check_curl_installed():
+            # Dependencies now installed, data exists - mark complete and go to dashboard
+            self.config.set("data_path", "/mnt/zebra-data")
+            self.config.mark_installed()
+            self.config.set("docker_configured", True)
+            self.config.save()
+            # Close installer and open dashboard
+            from dashboard import DashboardWindow
+            self.hide()
+            self.dashboard = DashboardWindow(self.config)
+            self.dashboard.show()
+            return
+        
+        # First, check actual system state - if Docker is installed but phase says not started,
+        # skip to drive selection
         if phase == Config.PHASE_NOT_STARTED:
+            if self.node_manager.check_docker_installed() and self.node_manager.check_curl_installed():
+                # Docker and curl already installed, skip to drive selection
+                self.config.set_phase(Config.PHASE_REBOOT_DONE)
+                QTimer.singleShot(100, lambda: self._go_to_page(2))
+                return
             # Fresh install, stay on welcome
             return
         
@@ -3236,10 +3607,11 @@ class UpdateThread(QThread):
     """Background thread for updates"""
     finished = pyqtSignal(bool, str)  # success, message
     
-    def __init__(self, update_type, data_path=None):
+    def __init__(self, update_type, data_path=None, zebra_version="3.1.0"):
         super().__init__()
         self.update_type = update_type
         self.data_path = data_path
+        self.zebra_version = zebra_version
     
     def run(self):
         import subprocess
@@ -3274,10 +3646,47 @@ class UpdateThread(QThread):
                     error = result.stderr or result.stdout or "Unknown error"
                     self.finished.emit(False, f"Update failed: {error}")
             
+            elif self.update_type == "zecnode_beta":
+                # Beta update - download from beta branch
+                home = os.path.expanduser("~")
+                zecnode_dir = os.path.join(home, "zecnode")
+                config_dir = os.path.join(home, ".zecnode")
+                cache_dir = os.path.join(zecnode_dir, "__pycache__")
+                
+                # Clear config and cache first
+                import shutil
+                if os.path.exists(config_dir):
+                    shutil.rmtree(config_dir)
+                if os.path.exists(cache_dir):
+                    shutil.rmtree(cache_dir)
+                
+                result = subprocess.run(
+                    ["bash", "-c", f"""
+                        curl -sSL https://raw.githubusercontent.com/mycousiinvinny/zecnode/main/install_zecnode.beta.sh -o /tmp/zecnode_update.sh
+                        # Extract just the Python code between the markers
+                        sed -n '/^cat > main.py << '\\''ENDOFFILE'\\''$/,/^ENDOFFILE$/p' /tmp/zecnode_update.sh | tail -n +2 | head -n -1 > {zecnode_dir}/main.py.new
+                        if [ -s {zecnode_dir}/main.py.new ]; then
+                            mv {zecnode_dir}/main.py.new {zecnode_dir}/main.py
+                            rm -f /tmp/zecnode_update.sh
+                            echo "SUCCESS"
+                        else
+                            rm -f {zecnode_dir}/main.py.new /tmp/zecnode_update.sh
+                            echo "FAILED: Could not extract main.py"
+                            exit 1
+                        fi
+                    """],
+                    capture_output=True, text=True, timeout=120
+                )
+                if result.returncode == 0 and "SUCCESS" in result.stdout:
+                    self.finished.emit(True, "RESTART_ZECNODE")
+                else:
+                    error = result.stderr or result.stdout or "Unknown error"
+                    self.finished.emit(False, f"Update failed: {error}")
+            
             elif self.update_type == "zebra":
                 # Pull latest image
                 result = subprocess.run(
-                    ["docker", "pull", "zfnd/zebra:latest"],
+                    ["docker", "pull", f"zfnd/zebra:{self.zebra_version}"],
                     capture_output=True, text=True, timeout=300
                 )
                 if result.returncode != 0:
@@ -3307,10 +3716,10 @@ class UpdateThread(QThread):
                 
                 # Fallback if we couldn't get mounts
                 if not volume_mounts:
-                    data_path = self.data_path or "/mnt/zcash"
+                    data_path = self.data_path or "/mnt/zebra-data"
                     volume_mounts = [
-                        f"{data_path}/zebra-cache:/var/cache/zebrad-cache",
-                        f"{data_path}/zebra-state:/var/lib/zebrad"
+                        f"{data_path}/zebra-cache:/home/zebra/.cache/zebra",
+                        f"{data_path}/zebra-state:/home/zebra/.local/state/zebra"
                     ]
                 
                 # Check if container is running
@@ -3327,11 +3736,17 @@ class UpdateThread(QThread):
                 # Remove old container
                 subprocess.run(["docker", "rm", "zebra"], capture_output=True, timeout=10)
                 
+                # Ensure zecnode network exists
+                subprocess.run(["docker", "network", "create", "zecnode"], capture_output=True)
+                
                 # Build docker run command with same mounts
                 docker_cmd = [
                     "docker", "run", "-d",
                     "--name", "zebra",
+                    "--network", "zecnode",
                     "--restart", "unless-stopped",
+                    "-e", "ZEBRA_RPC__LISTEN_ADDR=0.0.0.0:8232",
+                    "-e", "ZEBRA_RPC__ENABLE_COOKIE_AUTH=false",
                 ]
                 
                 # Add all volume mounts
@@ -3341,7 +3756,7 @@ class UpdateThread(QThread):
                 # Add port mapping
                 docker_cmd.extend(["-p", "8233:8233"])
                 
-                docker_cmd.append("zfnd/zebra:latest")
+                docker_cmd.append(f"zfnd/zebra:{self.zebra_version}")
                 
                 result = subprocess.run(docker_cmd, capture_output=True, text=True, timeout=30)
                 
@@ -3449,7 +3864,8 @@ class DashboardWindow(QMainWindow):
     def __init__(self, config: Config):
         super().__init__()
         self.config = config
-        self.node_manager = NodeManager(config.get_data_path())
+        zebra_version = config.get("zebra_version", "3.1.0")
+        self.node_manager = NodeManager(config.get_data_path(), zebra_version=zebra_version)
         self._centered = False
         self._drag_pos = None
         
@@ -3464,7 +3880,7 @@ class DashboardWindow(QMainWindow):
         
         self.timer = QTimer()
         self.timer.timeout.connect(self._start_refresh)
-        self.timer.start(5000)  # 5 seconds - reduces thread buildup
+        self.timer.start(3000)  # 3 seconds
         self._action_in_progress = False
         self._closing = False
         self.refresh_thread = None
@@ -3476,6 +3892,19 @@ class DashboardWindow(QMainWindow):
         self.price_timer.timeout.connect(self._fetch_price)
         self.price_timer.start(30000)
         self._fetch_price()
+        
+        # Cleanup timer - garbage collect every hour to prevent zombie thread buildup
+        self.cleanup_timer = QTimer()
+        self.cleanup_timer.timeout.connect(self._cleanup_threads)
+        self.cleanup_timer.start(1800000)  # 30 minutes
+    
+    def _update_zebra_version(self):
+        """Update the Zebra version label"""
+        version = self.node_manager.get_zebra_version(self.config)
+        if version and version != "--":
+            self.zebra_version_label.setText(f"Zebra v{version}")
+        else:
+            self.zebra_version_label.setText("Zebra v--")
     
     def mousePressEvent(self, event):
         """Enable dragging the window"""
@@ -3547,6 +3976,11 @@ class DashboardWindow(QMainWindow):
         version_label = QLabel(f"v{VERSION}")
         version_label.setStyleSheet("color: #555; font-size: 10px; border: none; background: transparent;")
         title_section.addWidget(version_label)
+        
+        self.zebra_version_label = QLabel("Zebra v--")
+        self.zebra_version_label.setStyleSheet("color: #555; font-size: 10px; border: none; background: transparent;")
+        self.zebra_version_label.setVisible(False)  # Hidden until node confirmed running
+        title_section.addWidget(self.zebra_version_label)
         
         header.addLayout(title_section)
         
@@ -3625,6 +4059,36 @@ class DashboardWindow(QMainWindow):
         sync_label = QLabel("Sync Progress")
         sync_label.setStyleSheet("color: #888; font-size: 11px; border: none; background: transparent;")
         sync_header.addWidget(sync_label)
+        
+        sync_info = QLabel("ⓘ")
+        sync_info.setStyleSheet("""
+            QLabel {
+                color: #555;
+                font-size: 11px;
+                border: none;
+                background-color: transparent;
+                padding-left: 4px;
+            }
+            QLabel:hover {
+                color: #f4b728;
+            }
+            QToolTip {
+                background-color: #1a1a24;
+                color: #ffffff;
+                border: 2px solid #4ade80;
+                padding: 12px;
+                border-radius: 8px;
+                font-size: 13px;
+            }
+        """)
+        sync_info.setToolTip(
+            "If sync shows 0%, don't worry — your data is safe.\n\n"
+            "After starting or updating, the node needs a moment\n"
+            "to verify existing data before syncing resumes.\n\n"
+            "Check 'Logs' for block heights to confirm progress."
+        )
+        sync_header.addWidget(sync_info)
+        
         sync_header.addStretch()
         self.sync_percent_label = QLabel("0%")
         self.sync_percent_label.setStyleSheet("color: #fff; font-size: 11px; font-weight: bold; border: none; background: transparent;")
@@ -3658,6 +4122,132 @@ class DashboardWindow(QMainWindow):
         sync_layout.addWidget(self.sync_height_label)
         
         layout.addWidget(sync_container)
+        
+        layout.addSpacing(15)
+        
+        # Lightwalletd Card
+        lwd_container = QWidget()
+        lwd_container.setObjectName("lwdContainer")
+        lwd_container.setStyleSheet("""
+            #lwdContainer {
+                background-color: #1a1a24;
+                border: 1px solid #2a2a35;
+                border-radius: 12px;
+            }
+        """)
+        lwd_layout = QVBoxLayout(lwd_container)
+        lwd_layout.setContentsMargins(15, 12, 15, 12)
+        lwd_layout.setSpacing(8)
+        
+        # Top row: Title and Toggle
+        lwd_top = QHBoxLayout()
+        lwd_title = QLabel("Lightwalletd")
+        lwd_title.setFont(QFont("Segoe UI", 13, QFont.Bold))
+        lwd_title.setStyleSheet("color: #e8e8e8; border: none; background: transparent;")
+        lwd_top.addWidget(lwd_title)
+        
+        # Info icon with tooltip
+        lwd_info = QLabel("ⓘ")
+        lwd_info.setStyleSheet("""
+            QLabel {
+                color: #555;
+                font-size: 11px;
+                border: none;
+                background-color: transparent;
+                padding-left: 4px;
+            }
+            QLabel:hover {
+                color: #f4b728;
+            }
+            QToolTip {
+                background-color: #1a1a24;
+                color: #ffffff;
+                border: 2px solid #4ade80;
+                padding: 12px;
+                border-radius: 8px;
+                font-size: 13px;
+            }
+        """)
+        lwd_info.setToolTip(
+            "Lightwalletd lets mobile wallets (like Zashi and Ywallet) "
+            "connect to YOUR node instead of public servers.\n\n"
+            "• More privacy - your transactions stay local\n"
+            "• More decentralization - reduces reliance on third parties\n"
+            "• Share with friends and family for private wallet access\n\n"
+            "Requires Zebra to be fully synced."
+        )
+        lwd_top.addWidget(lwd_info)
+        
+        lwd_top.addStretch()
+        
+        # Toggle switch
+        self.lwd_toggle = QPushButton("OFF")
+        self.lwd_toggle.setCheckable(True)
+        self.lwd_toggle.setFixedSize(90, 34)
+        self.lwd_toggle.setStyleSheet("""
+            QPushButton {
+                background-color: #444;
+                border: 2px solid #555;
+                border-radius: 17px;
+                color: white;
+                font-size: 12px;
+                font-weight: bold;
+                padding: 4px 10px;
+            }
+            QPushButton:checked {
+                background-color: #4ade80;
+                border-color: #4ade80;
+                color: black;
+            }
+        """)
+        self.lwd_toggle.clicked.connect(self._toggle_lightwalletd)
+        lwd_top.addWidget(self.lwd_toggle)
+        lwd_layout.addLayout(lwd_top)
+        
+        # Status row
+        lwd_status_row = QHBoxLayout()
+        status_label = QLabel("Status:")
+        status_label.setStyleSheet("color: #888; font-size: 12px; border: none; background: transparent;")
+        lwd_status_row.addWidget(status_label)
+        
+        self.lwd_status = QLabel("Off")
+        self.lwd_status.setStyleSheet("color: #888; font-size: 12px; border: none; background: transparent;")
+        lwd_status_row.addWidget(self.lwd_status)
+        lwd_status_row.addStretch()
+        lwd_layout.addLayout(lwd_status_row)
+        
+        # URL row (hidden when off)
+        self.lwd_url_row = QWidget()
+        self.lwd_url_row.setStyleSheet("background: transparent;")
+        lwd_url_layout = QHBoxLayout(self.lwd_url_row)
+        lwd_url_layout.setContentsMargins(0, 0, 0, 0)
+        lwd_url_layout.setSpacing(10)
+        
+        self.lwd_url = QLabel("http://192.168.1.100:9067")
+        self.lwd_url.setStyleSheet("color: #4ade80; font-size: 12px; font-family: monospace; border: none; background: transparent;")
+        lwd_url_layout.addWidget(self.lwd_url)
+        lwd_url_layout.addStretch()
+        
+        self.lwd_copy_btn = QPushButton("Copy")
+        self.lwd_copy_btn.setFixedSize(90, 34)
+        self.lwd_copy_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #2a2a3a;
+                border: 1px solid #444;
+                border-radius: 17px;
+                color: white;
+                font-size: 12px;
+                padding: 4px 10px;
+            }
+            QPushButton:hover { background-color: #3a3a4a; }
+        """)
+        self.lwd_copy_btn.clicked.connect(self._copy_lwd_url)
+        lwd_url_layout.addWidget(self.lwd_copy_btn)
+        
+        self.lwd_url_row.setVisible(False)
+        lwd_layout.addWidget(self.lwd_url_row)
+        
+        layout.addWidget(lwd_container)
         
         layout.addStretch()
         
@@ -3780,11 +4370,19 @@ class DashboardWindow(QMainWindow):
         update_zecnode.triggered.connect(self._update_zecnode)
         menu.addAction(update_zecnode)
         
+        update_beta = QAction("Update to Beta", self)
+        update_beta.triggered.connect(self._update_zecnode_beta)
+        menu.addAction(update_beta)
+        
         self.tray_update_zebra = QAction("Update Zebra", self)
         self.tray_update_zebra.triggered.connect(self._update_zebra)
         menu.addAction(self.tray_update_zebra)
         
         menu.addSeparator()
+        
+        reset_action = QAction("Reset ZecNode", self)
+        reset_action.triggered.connect(self._reset_zecnode)
+        menu.addAction(reset_action)
         
         self.tray_toggle_dashboard = QAction("Hide Dashboard", self)
         self.tray_toggle_dashboard.triggered.connect(self._toggle_dashboard_from_menu)
@@ -3854,6 +4452,13 @@ class DashboardWindow(QMainWindow):
         if self.refresh_thread is not None and self.refresh_thread.isRunning():
             return
         
+        # Thread pool limit - if too many threads, force cleanup first
+        import threading
+        active_threads = threading.active_count()
+        if active_threads > 100:
+            print(f"Thread limit reached ({active_threads}), forcing cleanup...")
+            self._cleanup_threads()
+        
         # Clean up old thread
         if self.refresh_thread is not None:
             try:
@@ -3866,10 +4471,23 @@ class DashboardWindow(QMainWindow):
         self.refresh_thread.finished.connect(self._on_refresh_done)
         self.refresh_thread.start()
     
+    def _cleanup_threads(self):
+        """Force garbage collection to clean up zombie threads"""
+        import gc
+        import threading
+        before = threading.active_count()
+        gc.collect()
+        after = threading.active_count()
+        print(f"Thread cleanup: {before} -> {after} threads")
+    
     def _on_refresh_done(self, status, has_internet, ssd, sd):
         """Handle refresh results from background thread"""
         # Exit if closing
         if self._closing:
+            return
+        
+        # Skip UI update if an action is in progress (stop/start/restart)
+        if self._action_in_progress:
             return
         
         # Status - check internet first, then running state
@@ -3889,12 +4507,18 @@ class DashboardWindow(QMainWindow):
             self.status_text.setText("Running")
             self.status_text.setStyleSheet("color: #4ade80; border: none; background: transparent;")
             self._update_tray_icon("running")
+            # Update Zebra version if it shows "latest" or "--"
+            current = self.zebra_version_label.text()
+            if "latest" in current or "--" in current or not self.zebra_version_label.isVisible():
+                self._update_zebra_version()
+            self.zebra_version_label.setVisible(True)
         else:
             # Node is stopped
             self.status_dot.set_state(StatusDot.STATE_STOPPED)
             self.status_text.setText("Stopped")
             self.status_text.setStyleSheet("color: #ef4444; border: none; background: transparent;")
             self._update_tray_icon("stopped")
+            self.zebra_version_label.setVisible(False)
         
         # Stats (only updated when online)
         self.peers_card.set_value(str(status.peer_count))
@@ -3931,9 +4555,60 @@ class DashboardWindow(QMainWindow):
         self.tray_start.setVisible(not status.running)
         self.tray_update_zebra.setEnabled(not status.running)
         
+        # Lightwalletd status
+        self._update_lightwalletd_status(status)
+        
         # Force UI to repaint
         self.update()
         QApplication.processEvents()
+    
+    def _update_lightwalletd_status(self, zebra_status):
+        """Update lightwalletd UI based on current state"""
+        lwd_running = self.node_manager.is_lightwalletd_running()
+        lwd_enabled = self.config.get("lightwalletd_enabled", False)
+        is_synced = zebra_status.running and zebra_status.sync_percent >= 99.9
+        
+        # Auto-start if enabled and Zebra is synced
+        if lwd_enabled and is_synced and not lwd_running:
+            success, _ = self.node_manager.start_lightwalletd()
+            lwd_running = success
+        
+        # Auto-stop if Zebra stops
+        if lwd_running and not zebra_status.running:
+            self.node_manager.stop_lightwalletd()
+            lwd_running = False
+        
+        # Update UI
+        if lwd_running:
+            self.lwd_toggle.setChecked(True)
+            self.lwd_toggle.setText("ON")
+            self.lwd_status.setText("Running")
+            self.lwd_status.setStyleSheet("color: #4ade80; font-size: 12px; border: none; background: transparent;")
+            self.lwd_url.setText(self.node_manager.get_lightwalletd_url())
+            self.lwd_url_row.setVisible(True)
+            self.lwd_toggle.setEnabled(True)
+        elif not zebra_status.running:
+            self.lwd_toggle.setChecked(False)
+            self.lwd_toggle.setText("OFF")
+            self.lwd_status.setText("Node stopped")
+            self.lwd_status.setStyleSheet("color: #ef4444; font-size: 12px; border: none; background: transparent;")
+            self.lwd_url_row.setVisible(False)
+            self.lwd_toggle.setEnabled(False)
+        elif zebra_status.sync_percent < 99.9:
+            self.lwd_toggle.setChecked(False)
+            self.lwd_toggle.setText("OFF")
+            self.lwd_status.setText(f"Syncing ({zebra_status.sync_percent:.1f}%)")
+            self.lwd_status.setStyleSheet("color: #888; font-size: 12px; border: none; background: transparent;")
+            self.lwd_url_row.setVisible(False)
+            self.lwd_toggle.setEnabled(False)
+        else:
+            # Zebra synced but lwd not running
+            self.lwd_toggle.setChecked(False)
+            self.lwd_toggle.setText("OFF")
+            self.lwd_status.setText("Ready")
+            self.lwd_status.setStyleSheet("color: #4ade80; font-size: 12px; border: none; background: transparent;")
+            self.lwd_url_row.setVisible(False)
+            self.lwd_toggle.setEnabled(True)
     
     def _stop(self):
         self._action_in_progress = True
@@ -4034,6 +4709,23 @@ class DashboardWindow(QMainWindow):
         self.update_thread.finished.connect(self._on_update_done)
         self.update_thread.start()
     
+    def _update_zecnode_beta(self):
+        """Update ZecNode to beta version from GitHub"""
+        dialog = ConfirmDialog(
+            self, 
+            "Update to Beta",
+            "Download and install the beta version?\n\nWarning: Beta versions may be unstable.\n\nThe app will restart after updating."
+        )
+        if dialog.exec_() != QDialog.Accepted:
+            return
+        
+        self.update_dialog = UpdateDialog(self, "Updating to Beta...")
+        self.update_dialog.show()
+        
+        self.update_thread = UpdateThread("zecnode_beta")
+        self.update_thread.finished.connect(self._on_update_done)
+        self.update_thread.start()
+    
     def _update_zebra(self):
         """Update Zebra to latest version"""
         dialog = ConfirmDialog(
@@ -4048,7 +4740,8 @@ class DashboardWindow(QMainWindow):
         self.update_dialog.show()
         
         data_path = self.config.get_data_path() if hasattr(self.config, 'get_data_path') else "/mnt/zcash"
-        self.update_thread = UpdateThread("zebra", data_path)
+        zebra_version = "latest"
+        self.update_thread = UpdateThread("zebra", data_path, zebra_version)
         self.update_thread.finished.connect(self._on_update_done)
         self.update_thread.start()
     
@@ -4071,15 +4764,135 @@ class DashboardWindow(QMainWindow):
             else:
                 dialog = MessageDialog(self, "Update Complete", message, is_error=False)
                 dialog.exec_()
+                # Update Zebra version label after Zebra update
+                self._update_zebra_version()
         else:
             dialog = MessageDialog(self, "Update Failed", message, is_error=True)
             dialog.exec_()
         
         self._start_refresh()
     
+    def _toggle_lightwalletd(self):
+        """Toggle lightwalletd on/off"""
+        if self.lwd_toggle.isChecked():
+            # Check if Zebra is synced
+            status = self.node_manager.get_status()
+            if not status.running:
+                self.lwd_toggle.setChecked(False)
+                self.lwd_status.setText("Requires running node")
+                self.lwd_status.setStyleSheet("color: #f59e0b; font-size: 12px; border: none; background: transparent;")
+                return
+            
+            if status.sync_percent < 100:
+                self.lwd_toggle.setChecked(False)
+                self.lwd_status.setText(f"Requires synced node ({status.sync_percent:.1f}%)")
+                self.lwd_status.setStyleSheet("color: #f59e0b; font-size: 12px; border: none; background: transparent;")
+                return
+            
+            # Start lightwalletd in background thread
+            self.lwd_toggle.setText("...")
+            self.lwd_toggle.setEnabled(False)
+            self.lwd_status.setText("Starting...")
+            self.lwd_status.setStyleSheet("color: #f4b728; font-size: 12px; border: none; background: transparent;")
+            
+            def start_lwd():
+                success, msg = self.node_manager.start_lightwalletd()
+                return success, msg
+            
+            def on_start_done(result):
+                success, msg = result
+                if success:
+                    self.lwd_toggle.setText("ON")
+                    self.lwd_status.setText("Running")
+                    self.lwd_status.setStyleSheet("color: #4ade80; font-size: 12px; border: none; background: transparent;")
+                    self.lwd_url.setText(self.node_manager.get_lightwalletd_url())
+                    self.lwd_url_row.setVisible(True)
+                    self.config.set("lightwalletd_enabled", True)
+                else:
+                    self.lwd_toggle.setChecked(False)
+                    self.lwd_toggle.setText("OFF")
+                    self.lwd_status.setText(f"Error: {msg}")
+                    self.lwd_status.setStyleSheet("color: #ef4444; font-size: 12px; border: none; background: transparent;")
+                self.lwd_toggle.setEnabled(True)
+            
+            self._run_in_thread(start_lwd, on_start_done)
+        else:
+            # Stop lightwalletd in background thread
+            self.lwd_toggle.setText("...")
+            self.lwd_toggle.setEnabled(False)
+            self.lwd_status.setText("Stopping...")
+            self.lwd_status.setStyleSheet("color: #f4b728; font-size: 12px; border: none; background: transparent;")
+            
+            def stop_lwd():
+                self.node_manager.stop_lightwalletd()
+                return True
+            
+            def on_stop_done(result):
+                self.lwd_toggle.setText("OFF")
+                self.lwd_toggle.setEnabled(True)
+                self.lwd_status.setText("Off")
+                self.lwd_status.setStyleSheet("color: #888; font-size: 12px; border: none; background: transparent;")
+                self.lwd_url_row.setVisible(False)
+                self.config.set("lightwalletd_enabled", False)
+            
+            self._run_in_thread(stop_lwd, on_stop_done)
+    
+    def _run_in_thread(self, func, callback):
+        """Run a function in a background thread and call callback with result"""
+        class WorkerThread(QThread):
+            finished = pyqtSignal(object)
+            def __init__(self, fn):
+                super().__init__()
+                self.fn = fn
+            def run(self):
+                result = self.fn()
+                self.finished.emit(result)
+        
+        thread = WorkerThread(func)
+        thread.finished.connect(callback)
+        thread.finished.connect(lambda: thread.deleteLater())
+        thread.start()
+        # Keep reference to prevent garbage collection
+        if not hasattr(self, '_threads'):
+            self._threads = []
+        self._threads.append(thread)
+    
+    def _copy_lwd_url(self):
+        """Copy lightwalletd URL to clipboard"""
+        clipboard = QApplication.clipboard()
+        clipboard.setText(self.lwd_url.text())
+        # Brief visual feedback
+        self.lwd_copy_btn.setText("Copied!")
+        QTimer.singleShot(1500, lambda: self.lwd_copy_btn.setText("Copy"))
+    
     def _show_logs(self):
         dialog = LogsDialog(self, self.node_manager)
         dialog.exec_()
+    
+    def _reset_zecnode(self):
+        """Reset ZecNode config and restart"""
+        dialog = ConfirmDialog(
+            self,
+            "Reset ZecNode",
+            "This will reset all settings and restart ZecNode.\n\nYour node data will NOT be deleted.\n\nContinue?"
+        )
+        dialog.yes_btn.setText("Reset")
+        if dialog.exec_() == QDialog.Accepted:
+            import shutil
+            import sys
+            config_dir = os.path.expanduser("~/.zecnode")
+            cache_dir = os.path.expanduser("~/zecnode/__pycache__")
+            
+            # Remove config and cache
+            if os.path.exists(config_dir):
+                shutil.rmtree(config_dir)
+            if os.path.exists(cache_dir):
+                shutil.rmtree(cache_dir)
+            
+            # Restart ZecNode
+            self.tray.hide()
+            QApplication.processEvents()
+            os.execv(sys.executable, [sys.executable, os.path.expanduser("~/zecnode/main.py")])
     
     def _quit(self):
         dialog = ConfirmDialog(
@@ -4090,14 +4903,12 @@ class DashboardWindow(QMainWindow):
         dialog.yes_btn.setText("Quit")
         if dialog.exec_() == QDialog.Accepted:
             self.tray.hide()
-            QApplication.processEvents()
             import os
             os._exit(0)
     
     def closeEvent(self, event):
-        # Hide tray and close
+        # Hide tray and close immediately
         self.tray.hide()
-        QApplication.processEvents()
         event.accept()
         import os
         os._exit(0)
