@@ -488,19 +488,9 @@ def main():
                     config.save()
                     window = InstallerWizard(config)
             else:
-                # No data found - show welcome dialog to select install type
-                from dashboard import WelcomeDialog
-                from PyQt5.QtWidgets import QDialog
-                welcome = WelcomeDialog()
-                result = welcome.exec_()
-                
-                if result == QDialog.Rejected:
-                    sys.exit(0)
-                
-                selected_version = welcome.selected_version
-                config.set("zebra_version", selected_version)
+                # No data found - go straight to installer with latest version
+                config.set("zebra_version", "latest")
                 config.save()
-                
                 window = InstallerWizard(config)
     
     window.show()
@@ -3360,115 +3350,6 @@ class StatusDot(QWidget):
         painter.setBrush(color)
         painter.setPen(Qt.NoPen)
         painter.drawEllipse(1, 1, 10, 10)
-
-
-class WelcomeDialog(QDialog):
-    """Welcome dialog to select install type - fresh or existing node"""
-    
-    def __init__(self):
-        super().__init__()
-        self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
-        self.setModal(True)
-        self.setFixedSize(500, 350)
-        self.setAttribute(Qt.WA_TranslucentBackground)
-        self.selected_version = "4.0.0"  # Default to latest
-        
-        # Main container
-        container = QFrame(self)
-        container.setGeometry(0, 0, 500, 350)
-        container.setStyleSheet("""
-            QFrame {
-                background-color: #1a1a24;
-                border: 1px solid #333;
-                border-radius: 15px;
-            }
-        """)
-        
-        # Close button (X) in top right
-        close_btn = QPushButton("✕", container)
-        close_btn.setGeometry(455, 10, 30, 30)
-        close_btn.setStyleSheet("""
-            QPushButton {
-                background-color: transparent;
-                border: none;
-                color: #666;
-                font-size: 18px;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                color: #fff;
-            }
-        """)
-        close_btn.clicked.connect(self.reject)
-        
-        # Title
-        title_label = QLabel("Welcome to ZecNode", container)
-        title_label.setGeometry(0, 25, 500, 35)
-        title_label.setFont(QFont("Segoe UI", 16, QFont.Bold))
-        title_label.setStyleSheet("color: #f4b728; border: none; background: transparent;")
-        title_label.setAlignment(Qt.AlignCenter)
-        
-        # Subtitle
-        subtitle = QLabel("Select your situation:", container)
-        subtitle.setGeometry(0, 60, 500, 25)
-        subtitle.setStyleSheet("color: #888; font-size: 12px; border: none; background: transparent;")
-        subtitle.setAlignment(Qt.AlignCenter)
-        
-        # Button style
-        btn_style = """
-            QPushButton {
-                background-color: #2a2a3a;
-                border: 2px solid #333;
-                border-radius: 10px;
-                color: #e8e8e8;
-                font-size: 14px;
-                font-weight: bold;
-                text-align: left;
-                padding-left: 20px;
-            }
-            QPushButton:hover {
-                background-color: #3a3a4a;
-                border-color: #f4b728;
-            }
-        """
-        
-        # Fresh Install button (y=95, height=50)
-        fresh_btn = QPushButton("🆕  Fresh Install", container)
-        fresh_btn.setGeometry(50, 95, 400, 50)
-        fresh_btn.setStyleSheet(btn_style)
-        fresh_btn.clicked.connect(lambda: self._select("4.0.0"))
-        
-        fresh_desc = QLabel("New setup, no existing Zcash node data", container)
-        fresh_desc.setGeometry(90, 145, 350, 18)
-        fresh_desc.setStyleSheet("color: #666; font-size: 11px; border: none; background: transparent;")
-        
-        # Existing 3.1.0 button (y=170, height=50)
-        v31_btn = QPushButton("📦  Existing Zebra 3.1.0", container)
-        v31_btn.setGeometry(50, 170, 400, 50)
-        v31_btn.setStyleSheet(btn_style)
-        v31_btn.clicked.connect(lambda: self._select("3.1.0"))
-        
-        v31_desc = QLabel("I have a synced node running Zebra version 3.1.0", container)
-        v31_desc.setGeometry(90, 220, 350, 18)
-        v31_desc.setStyleSheet("color: #666; font-size: 11px; border: none; background: transparent;")
-        
-        # Existing 4.0.0 button (y=245, height=50)
-        v40_btn = QPushButton("📦  Existing Zebra 4.0.0", container)
-        v40_btn.setGeometry(50, 245, 400, 50)
-        v40_btn.setStyleSheet(btn_style)
-        v40_btn.clicked.connect(lambda: self._select("4.0.0"))
-        
-        v40_desc = QLabel("I have a synced node running Zebra version 4.0.0", container)
-        v40_desc.setGeometry(90, 295, 350, 18)
-        v40_desc.setStyleSheet("color: #666; font-size: 11px; border: none; background: transparent;")
-        
-        # Center the dialog on screen
-        screen = QApplication.primaryScreen().geometry()
-        self.move((screen.width() - 500) // 2, (screen.height() - 350) // 2)
-    
-    def _select(self, version):
-        self.selected_version = version
-        self.accept()
 
 
 class ConfirmDialog(QDialog):
