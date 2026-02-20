@@ -3,7 +3,7 @@
 ## Major Fixes:
 
 - Fixed volume mount paths - data now correctly saves to SSD instead of inside Docker container
-fixed data loss on docker rm zebra - blockchain data persists
+and fixed data loss on docker rm zebra - blockchain data persists
 
 - Fixed double window bug after reboot with existing data
 
@@ -39,7 +39,7 @@ fixed data loss on docker rm zebra - blockchain data persists
   
 - Thread cleanup runs every 30 minutes (was 1 hour)
   
-- Removed processEvents() on quit to prevent potential freeze after long runtime
+- Removed processEvents() on quit to prevent potential freeze after long runtime (currently testing)
 
 ## Lightwalletd Fixes: 
 
