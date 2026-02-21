@@ -2,8 +2,7 @@
 
 ## Major Fixes:
 
-- Fixed volume mount paths - data now correctly saves to SSD instead of inside Docker container
-and fixed data loss on docker rm zebra - blockchain data persists
+- Fixed volume mount paths. Data now correctly saves to SSD instead of inside Docker container and fixed data loss on docker rm zebra
 
 - Fixed double window bug after reboot with existing data
 
