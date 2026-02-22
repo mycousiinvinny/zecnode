@@ -2739,7 +2739,7 @@ class InstallerWizard(QMainWindow):
         layout.addStretch()
         
         icon = QLabel("↻")
-        font = QFont()
+        font = QFont("DejaVu Sans")
         font.setPixelSize(90)
         icon.setFont(font)
         icon.setStyleSheet("color: #f4b728;")
