@@ -306,20 +306,6 @@ QMenu::item:selected {
 
 
 def main():
-    # Check for --reset flag
-    if "--reset" in sys.argv:
-        import shutil
-        config_dir = os.path.expanduser("~/.zecnode")
-        cache_dir = os.path.expanduser("~/zecnode/__pycache__")
-        if os.path.exists(config_dir):
-            shutil.rmtree(config_dir)
-            print("Config reset.")
-        if os.path.exists(cache_dir):
-            shutil.rmtree(cache_dir)
-            print("Cache cleared.")
-        print("Restarting ZecNode...")
-        os.execv(sys.executable, [sys.executable, os.path.expanduser("~/zecnode/main.py")])
-    
     # Kill any existing ZecNode instances (but not ourselves)
     my_pid = os.getpid()
     subprocess.run(
@@ -2751,8 +2737,9 @@ class InstallerWizard(QMainWindow):
         
         layout.addStretch()
         
-        icon = QLabel("🔄")
-        icon.setFont(QFont("Segoe UI", 48))
+        icon = QLabel("↻")
+        icon.setFont(QFont("Segoe UI", 96))
+        icon.setStyleSheet("color: #f4b728;")
         icon.setAlignment(Qt.AlignCenter)
         layout.addWidget(icon)
         
