@@ -2737,8 +2737,10 @@ class InstallerWizard(QMainWindow):
         
         layout.addStretch()
         
-        icon = QLabel("↻")
-        icon.setFont(QFont("Segoe UI", 96))
+        icon = QLabel("⟳")
+        font = QFont()
+        font.setPointSize(120)
+        icon.setFont(font)
         icon.setStyleSheet("color: #f4b728;")
         icon.setAlignment(Qt.AlignCenter)
         layout.addWidget(icon)
