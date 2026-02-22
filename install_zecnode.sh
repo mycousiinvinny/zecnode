@@ -2742,27 +2742,28 @@ class InstallerWizard(QMainWindow):
         class RestartIcon(QWidget):
             def __init__(self):
                 super().__init__()
-                self.setFixedSize(100, 100)
+                self.setFixedSize(90, 90)
             
             def paintEvent(self, event):
                 painter = QPainter(self)
                 painter.setRenderHint(QPainter.Antialiasing)
                 
                 pen = QPen(QColor("#f4b728"))
-                pen.setWidth(8)
+                pen.setWidth(6)
                 pen.setCapStyle(Qt.RoundCap)
                 painter.setPen(pen)
                 
-                # Draw arc (270 degrees)
-                rect = QRect(10, 10, 80, 80)
-                painter.drawArc(rect, 90 * 16, 270 * 16)
+                # Draw arc (300 degrees, leaving gap at top right)
+                rect = QRect(12, 12, 66, 66)
+                painter.drawArc(rect, 60 * 16, 300 * 16)
                 
-                # Draw arrow head
+                # Draw arrow head at the end of arc (top right)
+                painter.setPen(Qt.NoPen)
                 painter.setBrush(QColor("#f4b728"))
                 arrow = [
-                    QPoint(50, 5),
-                    QPoint(65, 20),
-                    QPoint(50, 25)
+                    QPoint(62, 8),
+                    QPoint(78, 24),
+                    QPoint(58, 28)
                 ]
                 painter.drawPolygon(QPolygon(arrow))
         
