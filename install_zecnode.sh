@@ -2738,41 +2738,13 @@ class InstallerWizard(QMainWindow):
         
         layout.addStretch()
         
-        # Custom painted restart icon
-        class RestartIcon(QWidget):
-            def __init__(self):
-                super().__init__()
-                self.setFixedSize(90, 90)
-            
-            def paintEvent(self, event):
-                painter = QPainter(self)
-                painter.setRenderHint(QPainter.Antialiasing)
-                
-                pen = QPen(QColor("#f4b728"))
-                pen.setWidth(6)
-                pen.setCapStyle(Qt.RoundCap)
-                painter.setPen(pen)
-                
-                # Draw arc (300 degrees, leaving gap at top right)
-                rect = QRect(12, 12, 66, 66)
-                painter.drawArc(rect, 60 * 16, 300 * 16)
-                
-                # Draw arrow head at the end of arc (top right)
-                painter.setPen(Qt.NoPen)
-                painter.setBrush(QColor("#f4b728"))
-                arrow = [
-                    QPoint(62, 8),
-                    QPoint(78, 24),
-                    QPoint(58, 28)
-                ]
-                painter.drawPolygon(QPolygon(arrow))
-        
-        icon_container = QHBoxLayout()
-        icon_container.addStretch()
-        icon = RestartIcon()
-        icon_container.addWidget(icon)
-        icon_container.addStretch()
-        layout.addLayout(icon_container)
+        icon = QLabel("↻")
+        font = QFont()
+        font.setPixelSize(90)
+        icon.setFont(font)
+        icon.setStyleSheet("color: #f4b728;")
+        icon.setAlignment(Qt.AlignCenter)
+        layout.addWidget(icon)
         
         layout.addItem(self._spacer(20))
         
