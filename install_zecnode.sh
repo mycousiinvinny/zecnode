@@ -2738,30 +2738,22 @@ class InstallerWizard(QMainWindow):
         
         layout.addStretch()
         
-        icon = QLabel("↻")
-        font = QFont("DejaVu Sans")
-        font.setPixelSize(90)
-        icon.setFont(font)
-        icon.setStyleSheet("color: #f4b728;")
-        icon.setAlignment(Qt.AlignCenter)
-        layout.addWidget(icon)
-        
-        layout.addItem(self._spacer(20))
-        
         title = QLabel("Reboot Required")
-        title.setFont(QFont("Segoe UI", 22, QFont.Bold))
+        title.setFont(QFont("Segoe UI", 28, QFont.Bold))
+        title.setStyleSheet("color: #f4b728;")
         title.setAlignment(Qt.AlignCenter)
         layout.addWidget(title)
         
-        layout.addItem(self._spacer(15))
+        layout.addItem(self._spacer(20))
         
         info = QLabel(
             "Docker has been installed.\n\n"
             "After reboot, run ZecNode again\n"
             "to continue the installation."
         )
+        info.setFont(QFont("Segoe UI", 14))
         info.setAlignment(Qt.AlignCenter)
-        info.setStyleSheet("color: #888; line-height: 1.5;")
+        info.setStyleSheet("color: #888;")
         layout.addWidget(info)
         
         layout.addStretch()
