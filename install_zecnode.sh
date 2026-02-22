@@ -1996,7 +1996,8 @@ from PyQt5.QtWidgets import (
     QMessageBox, QSpacerItem, QSizePolicy, QApplication, QFrame
 )
 from PyQt5.QtCore import Qt, QThread, pyqtSignal, QTimer, QRectF
-from PyQt5.QtGui import QFont, QPainter, QColor, QBrush, QPainterPath
+from PyQt5.QtGui import QFont, QPainter, QColor, QBrush, QPainterPath, QPen, QPolygon
+from PyQt5.QtCore import QPoint, QRect
 
 from config import Config
 from node_manager import NodeManager, DriveInfo
@@ -2737,13 +2738,40 @@ class InstallerWizard(QMainWindow):
         
         layout.addStretch()
         
-        icon = QLabel("⟳")
-        font = QFont()
-        font.setPointSize(120)
-        icon.setFont(font)
-        icon.setStyleSheet("color: #f4b728;")
-        icon.setAlignment(Qt.AlignCenter)
-        layout.addWidget(icon)
+        # Custom painted restart icon
+        class RestartIcon(QWidget):
+            def __init__(self):
+                super().__init__()
+                self.setFixedSize(100, 100)
+            
+            def paintEvent(self, event):
+                painter = QPainter(self)
+                painter.setRenderHint(QPainter.Antialiasing)
+                
+                pen = QPen(QColor("#f4b728"))
+                pen.setWidth(8)
+                pen.setCapStyle(Qt.RoundCap)
+                painter.setPen(pen)
+                
+                # Draw arc (270 degrees)
+                rect = QRect(10, 10, 80, 80)
+                painter.drawArc(rect, 90 * 16, 270 * 16)
+                
+                # Draw arrow head
+                painter.setBrush(QColor("#f4b728"))
+                arrow = [
+                    QPoint(50, 5),
+                    QPoint(65, 20),
+                    QPoint(50, 25)
+                ]
+                painter.drawPolygon(QPolygon(arrow))
+        
+        icon_container = QHBoxLayout()
+        icon_container.addStretch()
+        icon = RestartIcon()
+        icon_container.addWidget(icon)
+        icon_container.addStretch()
+        layout.addLayout(icon_container)
         
         layout.addItem(self._spacer(20))
         
