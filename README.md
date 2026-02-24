@@ -12,11 +12,11 @@ ZecNode is an independent community project and is not affiliated with, endorsed
 
 Open Terminal and run:
 
-*sudo apt install curl -y && curl -sSL https://raw.githubusercontent.com/mycousiinvinny/zecnode/main/install_zecnode.sh | bash*
+*sudo apt install curl -y && curl -sSL https://raw.githubusercontent.com/mycousiinvinny/zecnode/main/install.sh | bash*
 
 Command after reboot:
 
-*curl -sSL https://raw.githubusercontent.com/mycousiinvinny/zecnode/main/install_zecnode.sh | bash* 
+*curl -sSL https://raw.githubusercontent.com/mycousiinvinny/zecnode/main/install.sh | bash* 
 
 Please report any bugs you find.
 
@@ -60,4 +60,4 @@ More nodes = more decentralization = stronger network. That's it.
 
 ## Beta Testing
 
-*curl -sSL https://raw.githubusercontent.com/mycousiinvinny/zecnode/main/install_zecnode.beta.sh | bash*
+
