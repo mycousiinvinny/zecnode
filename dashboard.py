@@ -1787,21 +1787,40 @@ class DashboardWindow(QMainWindow):
             os.execv(sys.executable, [sys.executable, os.path.expanduser("~/zecnode/main.py")])
     
     def _quit(self):
-        dialog = ConfirmDialog(
-            self,
-            "Quit ZecNode",
-            "The node will keep running in the background.\n\nQuit ZecNode?"
-        )
-        dialog.yes_btn.setText("Quit")
-        if dialog.exec_() == QDialog.Accepted:
-            self.tray.hide()
-            import os
-            os._exit(0)
+        import time
+        print(f"[{time.time()}] _quit started")
+        # Set closing flag to stop all background operations
+        self._closing = True
+        print(f"[{time.time()}] _closing set")
+        self.timer.stop()
+        print(f"[{time.time()}] timer stopped")
+        self.cleanup_timer.stop()
+        print(f"[{time.time()}] cleanup_timer stopped")
+        self.price_timer.stop()
+        print(f"[{time.time()}] price_timer stopped")
+        self.tray.hide()
+        print(f"[{time.time()}] tray hidden")
+        import os
+        print(f"[{time.time()}] calling os._exit")
+        os._exit(0)
     
     def closeEvent(self, event):
-        # Hide tray and close immediately
+        import time
+        print(f"[{time.time()}] closeEvent started")
+        # Set closing flag to stop all background operations
+        self._closing = True
+        print(f"[{time.time()}] _closing set")
+        self.timer.stop()
+        print(f"[{time.time()}] timer stopped")
+        self.cleanup_timer.stop()
+        print(f"[{time.time()}] cleanup_timer stopped")
+        self.price_timer.stop()
+        print(f"[{time.time()}] price_timer stopped")
         self.tray.hide()
+        print(f"[{time.time()}] tray hidden")
         event.accept()
+        print(f"[{time.time()}] event accepted")
         import os
+        print(f"[{time.time()}] calling os._exit")
         os._exit(0)
 
