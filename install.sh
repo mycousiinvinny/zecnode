@@ -4,17 +4,10 @@ echo "================================"
 echo "       ZecNode Installer"
 echo "================================"
 
-# Get actual user's home directory (not root's when running with sudo)
-if [ -n "$SUDO_USER" ]; then
-    ACTUAL_HOME=$(getent passwd "$SUDO_USER" | cut -d: -f6)
-else
-    ACTUAL_HOME="$HOME"
-fi
-
 # Ensure sudo credentials are cached for the entire install
 sudo -v
 
-PROJECT_DIR="$ACTUAL_HOME/zecnode"
+PROJECT_DIR="$HOME/zecnode"
 GITHUB_RAW="https://raw.githubusercontent.com/mycousiinvinny/zecnode/main"
 
 mkdir -p "$PROJECT_DIR"
@@ -24,7 +17,7 @@ cd "$PROJECT_DIR"
 rm -rf "$PROJECT_DIR/__pycache__" 2>/dev/null || true
 
 # Smart config handling - detect actual system state
-CONFIG_FILE="$ACTUAL_HOME/.zecnode/config.json"
+CONFIG_FILE="$HOME/.zecnode/config.json"
 if [ -f "$CONFIG_FILE" ]; then
     # Config exists - check if it matches reality
     if ! command -v docker &> /dev/null; then
@@ -37,7 +30,7 @@ else
         # Docker exists but no config - check for zebra data
         if [ -d "/mnt/zebra-data/zebra-cache" ] && [ "$(ls -A /mnt/zebra-data/zebra-cache 2>/dev/null)" ]; then
             echo "Existing Zebra data found - creating config..."
-            mkdir -p "$ACTUAL_HOME/.zecnode"
+            mkdir -p "$HOME/.zecnode"
             cat > "$CONFIG_FILE" << 'CONFIGEOF'
 {
   "installed": true,
@@ -99,10 +92,4 @@ fi
 
 echo ""
 echo "Launching ZecNode..."
-
-# Launch as the actual user, not root (fixes tray icon position and window sizing)
-if [ -n "$SUDO_USER" ]; then
-    sudo -u "$SUDO_USER" python3 "$PROJECT_DIR/main.py"
-else
-    python3 main.py
-fi
+python3 main.py
