@@ -99,4 +99,10 @@ fi
 
 echo ""
 echo "Launching ZecNode..."
-python3 main.py
+
+# Launch as the actual user, not root (fixes tray icon position and window sizing)
+if [ -n "$SUDO_USER" ]; then
+    sudo -u "$SUDO_USER" python3 "$PROJECT_DIR/main.py"
+else
+    python3 main.py
+fi
