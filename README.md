@@ -60,6 +60,6 @@ More nodes = more decentralization = stronger network. That's it.
 
 ## Beta Testing
 
-*curl -sSL https://raw.githubusercontent.com/mycousiinvinny/zecnode/beta/install.sh | sudo bash*
+*curl -sSL https://raw.githubusercontent.com/mycousiinvinny/zecnode/beta/install.sh | bash*
 
 
