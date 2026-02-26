@@ -16,7 +16,7 @@ Open Terminal and run:
 
 Command after reboot:
 
-*curl -sSL https://raw.githubusercontent.com/mycousiinvinny/zecnode/main/install.sh | sudo bash* 
+*curl -sSL https://raw.githubusercontent.com/mycousiinvinny/zecnode/main/install.sh | sudo bash*
 
 Please report any bugs you find.
 
