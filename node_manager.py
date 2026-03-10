@@ -1125,9 +1125,12 @@ gsettings set org.gnome.desktop.session idle-delay 0 2>/dev/null || true
             result = subprocess.run(
                 ["docker", "logs", "--tail", str(lines), self.CONTAINER_NAME],
                 capture_output=True,
-                text=True
+                text=True,
+                timeout=15
             )
             return result.stdout + result.stderr
+        except subprocess.TimeoutExpired:
+            return "Error: timed out fetching logs"
         except Exception as e:
             return f"Error getting logs: {e}"
     
@@ -1146,7 +1149,8 @@ gsettings set org.gnome.desktop.session idle-delay 0 2>/dev/null || true
             result = subprocess.run(
                 ["df", "-h", self.MOUNT_PATH],
                 capture_output=True,
-                text=True
+                text=True,
+                timeout=5
             )
             if result.returncode == 0:
                 lines = result.stdout.strip().split('\n')
@@ -1159,7 +1163,8 @@ gsettings set org.gnome.desktop.session idle-delay 0 2>/dev/null || true
             result = subprocess.run(
                 ["df", "-h", "/"],
                 capture_output=True,
-                text=True
+                text=True,
+                timeout=5
             )
             if result.returncode == 0:
                 lines = result.stdout.strip().split('\n')

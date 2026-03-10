@@ -6,6 +6,8 @@ Professional status display and node controls
 import socket
 import json
 import os
+import sys
+import signal
 import urllib.request
 from PyQt5.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel,
@@ -22,16 +24,14 @@ from node_manager import NodeManager
 
 def check_internet(timeout=2) -> bool:
     """Check if internet is available by trying to connect to a reliable host"""
-    try:
-        socket.create_connection(("8.8.8.8", 53), timeout=timeout)
-        return True
-    except OSError:
-        pass
-    try:
-        socket.create_connection(("1.1.1.1", 53), timeout=timeout)
-        return True
-    except OSError:
-        return False
+    for host in ("8.8.8.8", "1.1.1.1"):
+        try:
+            conn = socket.create_connection((host, 53), timeout=timeout)
+            conn.close()
+            return True
+        except OSError:
+            continue
+    return False
 
 
 def fetch_zec_price():
@@ -777,7 +777,10 @@ class DashboardWindow(QMainWindow):
         self.price_timer.start(30000)
         self._fetch_price()
         
-        # Cleanup timer - garbage collect every hour to prevent zombie thread buildup
+        # Track all threads for cleanup
+        self._threads = []
+
+        # Cleanup timer - garbage collect every 30 min to prevent zombie thread buildup
         self.cleanup_timer = QTimer()
         self.cleanup_timer.timeout.connect(self._cleanup_threads)
         self.cleanup_timer.start(1800000)  # 30 minutes
@@ -1352,11 +1355,13 @@ class DashboardWindow(QMainWindow):
     
     def _cleanup_threads(self):
         """Clean up finished threads from the _threads list"""
-        if hasattr(self, '_threads'):
-            for t in self._threads:
-                if not t.isRunning():
-                    t.deleteLater()
-            self._threads = [t for t in self._threads if t.isRunning()]
+        before = len(self._threads)
+        finished = [t for t in self._threads if not t.isRunning()]
+        for t in finished:
+            t.deleteLater()
+        self._threads = [t for t in self._threads if t.isRunning()]
+        after = len(self._threads)
+        print(f"[ZecNode] Thread cleanup: {before - after} cleaned, {after} still running")
     
     def _on_refresh_done(self, status, has_internet, ssd, sd):
         """Handle refresh results from background thread"""
@@ -1736,9 +1741,6 @@ class DashboardWindow(QMainWindow):
                 result = self.fn()
                 self.finished.emit(result)
 
-        if not hasattr(self, '_threads'):
-            self._threads = []
-
         # Prune finished threads before adding new ones
         self._threads = [t for t in self._threads if t.isRunning()]
 
@@ -1786,43 +1788,44 @@ class DashboardWindow(QMainWindow):
             os.execv(sys.executable, [sys.executable, os.path.expanduser("~/zecnode/main.py")])
     
     def _shutdown(self):
-        """Common shutdown logic for both _quit and closeEvent"""
-        # Set closing flag first to stop all background operations
+        """Common shutdown logic for both _quit and closeEvent.
+
+        Uses a hard kill approach: stop timers, hide tray, then immediately
+        terminate the process. Trying to gracefully wait for threads that are
+        blocked on subprocess calls (docker, df) can hang indefinitely and
+        freeze the system.
+        """
+        # Prevent re-entry
+        if self._closing:
+            return
         self._closing = True
+
+        print("[ZecNode] Shutting down...")
 
         # Stop all timers so no new threads are spawned
         self.timer.stop()
         self.cleanup_timer.stop()
         self.price_timer.stop()
 
-        # Stop the running refresh thread so it exits quickly
+        # Tell refresh thread to stop (so it exits between subprocess calls)
         if self.refresh_thread is not None:
             self.refresh_thread.stop()
 
-        # Wait briefly for active threads to finish (max 2s total)
-        threads_to_wait = []
-        if self.refresh_thread is not None and self.refresh_thread.isRunning():
-            threads_to_wait.append(self.refresh_thread)
-        if self.price_thread is not None and self.price_thread.isRunning():
-            threads_to_wait.append(self.price_thread)
-        if hasattr(self, 'action_thread') and self.action_thread is not None and self.action_thread.isRunning():
-            threads_to_wait.append(self.action_thread)
-        if hasattr(self, '_threads'):
-            for t in self._threads:
-                if t.isRunning():
-                    threads_to_wait.append(t)
-
-        for t in threads_to_wait:
-            t.wait(500)  # wait up to 500ms per thread
-
+        # Hide tray icon before killing
         self.tray.hide()
+        QApplication.processEvents()
+
+        # Hard kill immediately - don't wait for threads that may be blocked
+        # on subprocess calls (docker logs, df, socket connections).
+        # os._exit skips cleanup but that's fine - we have no resources
+        # that require graceful shutdown beyond the tray icon above.
+        print("[ZecNode] Exiting.")
+        os.kill(os.getpid(), signal.SIGKILL)
 
     def _quit(self):
         self._shutdown()
-        os._exit(0)
 
     def closeEvent(self, event):
         self._shutdown()
         event.accept()
-        os._exit(0)
 
