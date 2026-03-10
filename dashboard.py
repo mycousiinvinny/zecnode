@@ -1335,34 +1335,28 @@ class DashboardWindow(QMainWindow):
         # Don't start new refresh if one is already running
         if self.refresh_thread is not None and self.refresh_thread.isRunning():
             return
-        
-        # Thread pool limit - if too many threads, force cleanup first
-        import threading
-        active_threads = threading.active_count()
-        if active_threads > 100:
-            print(f"Thread limit reached ({active_threads}), forcing cleanup...")
-            self._cleanup_threads()
-        
+
         # Clean up old thread
         if self.refresh_thread is not None:
             try:
                 self.refresh_thread.finished.disconnect()
             except:
                 pass
-        
+            self.refresh_thread.deleteLater()
+            self.refresh_thread = None
+
         # Start background refresh
         self.refresh_thread = RefreshThread(self.node_manager)
         self.refresh_thread.finished.connect(self._on_refresh_done)
         self.refresh_thread.start()
     
     def _cleanup_threads(self):
-        """Force garbage collection to clean up zombie threads"""
-        import gc
-        import threading
-        before = threading.active_count()
-        gc.collect()
-        after = threading.active_count()
-        print(f"Thread cleanup: {before} -> {after} threads")
+        """Clean up finished threads from the _threads list"""
+        if hasattr(self, '_threads'):
+            for t in self._threads:
+                if not t.isRunning():
+                    t.deleteLater()
+            self._threads = [t for t in self._threads if t.isRunning()]
     
     def _on_refresh_done(self, status, has_internet, ssd, sd):
         """Handle refresh results from background thread"""
@@ -1558,7 +1552,9 @@ class DashboardWindow(QMainWindow):
                 self.price_thread.finished.disconnect()
             except:
                 pass
-        
+            self.price_thread.deleteLater()
+            self.price_thread = None
+
         self.price_thread = PriceThread()
         self.price_thread.finished.connect(self._on_price_done)
         self.price_thread.start()
@@ -1739,14 +1735,17 @@ class DashboardWindow(QMainWindow):
             def run(self):
                 result = self.fn()
                 self.finished.emit(result)
-        
+
+        if not hasattr(self, '_threads'):
+            self._threads = []
+
+        # Prune finished threads before adding new ones
+        self._threads = [t for t in self._threads if t.isRunning()]
+
         thread = WorkerThread(func)
         thread.finished.connect(callback)
         thread.finished.connect(lambda: thread.deleteLater())
         thread.start()
-        # Keep reference to prevent garbage collection
-        if not hasattr(self, '_threads'):
-            self._threads = []
         self._threads.append(thread)
     
     def _copy_lwd_url(self):
@@ -1786,41 +1785,44 @@ class DashboardWindow(QMainWindow):
             QApplication.processEvents()
             os.execv(sys.executable, [sys.executable, os.path.expanduser("~/zecnode/main.py")])
     
+    def _shutdown(self):
+        """Common shutdown logic for both _quit and closeEvent"""
+        # Set closing flag first to stop all background operations
+        self._closing = True
+
+        # Stop all timers so no new threads are spawned
+        self.timer.stop()
+        self.cleanup_timer.stop()
+        self.price_timer.stop()
+
+        # Stop the running refresh thread so it exits quickly
+        if self.refresh_thread is not None:
+            self.refresh_thread.stop()
+
+        # Wait briefly for active threads to finish (max 2s total)
+        threads_to_wait = []
+        if self.refresh_thread is not None and self.refresh_thread.isRunning():
+            threads_to_wait.append(self.refresh_thread)
+        if self.price_thread is not None and self.price_thread.isRunning():
+            threads_to_wait.append(self.price_thread)
+        if hasattr(self, 'action_thread') and self.action_thread is not None and self.action_thread.isRunning():
+            threads_to_wait.append(self.action_thread)
+        if hasattr(self, '_threads'):
+            for t in self._threads:
+                if t.isRunning():
+                    threads_to_wait.append(t)
+
+        for t in threads_to_wait:
+            t.wait(500)  # wait up to 500ms per thread
+
+        self.tray.hide()
+
     def _quit(self):
-        import time
-        print(f"[{time.time()}] _quit started")
-        # Set closing flag to stop all background operations
-        self._closing = True
-        print(f"[{time.time()}] _closing set")
-        self.timer.stop()
-        print(f"[{time.time()}] timer stopped")
-        self.cleanup_timer.stop()
-        print(f"[{time.time()}] cleanup_timer stopped")
-        self.price_timer.stop()
-        print(f"[{time.time()}] price_timer stopped")
-        self.tray.hide()
-        print(f"[{time.time()}] tray hidden")
-        import os
-        print(f"[{time.time()}] calling os._exit")
+        self._shutdown()
         os._exit(0)
-    
+
     def closeEvent(self, event):
-        import time
-        print(f"[{time.time()}] closeEvent started")
-        # Set closing flag to stop all background operations
-        self._closing = True
-        print(f"[{time.time()}] _closing set")
-        self.timer.stop()
-        print(f"[{time.time()}] timer stopped")
-        self.cleanup_timer.stop()
-        print(f"[{time.time()}] cleanup_timer stopped")
-        self.price_timer.stop()
-        print(f"[{time.time()}] price_timer stopped")
-        self.tray.hide()
-        print(f"[{time.time()}] tray hidden")
+        self._shutdown()
         event.accept()
-        print(f"[{time.time()}] event accepted")
-        import os
-        print(f"[{time.time()}] calling os._exit")
         os._exit(0)
 
