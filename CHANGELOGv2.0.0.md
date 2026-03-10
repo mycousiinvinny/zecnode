@@ -1,3 +1,7 @@
+# v2.0.0 - March 9th 026
+
+-Fixed major freeze after closing dahboard. Caused by zombie Qthread buildup
+
 # v2.0.0 - February 20th 2026
 
 ## Major Fixes:
