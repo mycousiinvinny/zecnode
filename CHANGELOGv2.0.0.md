@@ -1,4 +1,4 @@
-# v2.0.0 - March 9th 026
+# v2.0.0 - March 9th 2026
 
 - Fixed major freeze after closing dashboard. Caused by zombie Qthread buildup
 
