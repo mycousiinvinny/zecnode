@@ -80,39 +80,52 @@ class NodeActionThread(QThread):
 
 class RefreshThread(QThread):
     """Background thread for fetching node status without blocking UI"""
-    finished = pyqtSignal(object, bool, str, str)  # status, has_internet, ssd, sd
-    
-    def __init__(self, node_manager):
+    finished = pyqtSignal(object, bool, str, str, bool, str)  # status, has_internet, ssd, sd, lwd_running, zebra_version
+
+    def __init__(self, node_manager, config=None):
         super().__init__()
         self.node_manager = node_manager
+        self.config = config
         self._running = True
-    
+
     def stop(self):
         self._running = False
-    
+
     def run(self):
         if not self._running:
             return
-        
+
         # Check internet
         has_internet = check_internet()
-        
+
         if not self._running:
             return
-        
+
         # Get node status (this is the slow call)
         status = self.node_manager.get_status()
-        
+
         if not self._running:
             return
-        
+
         # Get disk usage
         ssd, sd = self.node_manager.get_disk_usage()
-        
+
         if not self._running:
             return
-        
-        self.finished.emit(status, has_internet, ssd, sd)
+
+        # Check lightwalletd status (was previously blocking main thread)
+        lwd_running = self.node_manager.is_lightwalletd_running()
+
+        if not self._running:
+            return
+
+        # Get zebra version (was previously blocking main thread via docker exec)
+        zebra_version = self.node_manager.get_zebra_version(self.config) if status.running else "--"
+
+        if not self._running:
+            return
+
+        self.finished.emit(status, has_internet, ssd, sd, lwd_running, zebra_version)
 
 
 class LogsDialog(QDialog):
@@ -185,8 +198,25 @@ class LogsDialog(QDialog):
             self.status_label.setStyleSheet("color: #4ade80;")
     
     def _refresh(self):
-        logs = self.node_manager.get_logs(300)
-        
+        """Start background log fetch"""
+        if hasattr(self, '_log_thread') and self._log_thread is not None and self._log_thread.isRunning():
+            return
+
+        class LogThread(QThread):
+            finished = pyqtSignal(str)
+            def __init__(self, node_manager):
+                super().__init__()
+                self.node_manager = node_manager
+            def run(self):
+                logs = self.node_manager.get_logs(300)
+                self.finished.emit(logs)
+
+        self._log_thread = LogThread(self.node_manager)
+        self._log_thread.finished.connect(self._on_logs_done)
+        self._log_thread.start()
+
+    def _on_logs_done(self, logs):
+        """Update log display from background thread result"""
         # Filter out static startup messages that clutter the view
         filtered_lines = []
         skip_phrases = [
@@ -197,15 +227,23 @@ class LogsDialog(QDialog):
         for line in logs.split('\n'):
             if not any(phrase in line for phrase in skip_phrases):
                 filtered_lines.append(line)
-        
+
         self.log_text.setPlainText('\n'.join(filtered_lines))
         # Scroll to bottom to show latest logs
         self.log_text.moveCursor(QTextCursor.End)
         self.log_text.ensureCursorVisible()
+
+        # Clean up thread
+        if hasattr(self, '_log_thread') and self._log_thread is not None:
+            self._log_thread.deleteLater()
+            self._log_thread = None
     
     def closeEvent(self, event):
         self.timer.stop()
         self.timer.deleteLater()
+        if hasattr(self, '_log_thread') and self._log_thread is not None:
+            self._log_thread.deleteLater()
+            self._log_thread = None
         super().closeEvent(event)
 
 
@@ -465,6 +503,12 @@ class UpdateDialog(QDialog):
         self.message_label.setStyleSheet("color: #e8e8e8; font-size: 14px; border: none; background: transparent;")
         layout.addWidget(self.message_label)
         
+        # Create opacity effect once (not per-tick)
+        from PyQt5.QtWidgets import QGraphicsOpacityEffect
+        self._opacity_effect = QGraphicsOpacityEffect()
+        self._opacity_effect.setOpacity(1.0)
+        self.logo_label.setGraphicsEffect(self._opacity_effect)
+
         # Pulse animation timer
         self.pulse_timer = QTimer()
         self.pulse_timer.timeout.connect(self._pulse)
@@ -479,12 +523,8 @@ class UpdateDialog(QDialog):
             self._opacity += 0.03
             if self._opacity >= 1.0:
                 self._fading_out = True
-        
-        # Use setGraphicsEffect for actual opacity
-        from PyQt5.QtWidgets import QGraphicsOpacityEffect
-        effect = QGraphicsOpacityEffect()
-        effect.setOpacity(self._opacity)
-        self.logo_label.setGraphicsEffect(effect)
+
+        self._opacity_effect.setOpacity(self._opacity)
     
     def set_message(self, message):
         self.message_label.setText(message)
@@ -784,14 +824,6 @@ class DashboardWindow(QMainWindow):
         self.cleanup_timer = QTimer()
         self.cleanup_timer.timeout.connect(self._cleanup_threads)
         self.cleanup_timer.start(1800000)  # 30 minutes
-    
-    def _update_zebra_version(self):
-        """Update the Zebra version label"""
-        version = self.node_manager.get_zebra_version(self.config)
-        if version and version != "--":
-            self.zebra_version_label.setText(f"Zebra v{version}")
-        else:
-            self.zebra_version_label.setText("Zebra v--")
     
     def mousePressEvent(self, event):
         """Enable dragging the window"""
@@ -1336,43 +1368,50 @@ class DashboardWindow(QMainWindow):
             return
         
         # Don't start new refresh if one is already running
-        if self.refresh_thread is not None and self.refresh_thread.isRunning():
-            return
+        try:
+            if self.refresh_thread is not None and self.refresh_thread.isRunning():
+                return
+        except RuntimeError:
+            self.refresh_thread = None
 
-        # Clean up old thread
+        # Clean up old thread - just drop the reference, don't deleteLater
         if self.refresh_thread is not None:
             try:
                 self.refresh_thread.finished.disconnect()
             except:
                 pass
-            self.refresh_thread.deleteLater()
             self.refresh_thread = None
 
         # Start background refresh
-        self.refresh_thread = RefreshThread(self.node_manager)
+        self.refresh_thread = RefreshThread(self.node_manager, self.config)
         self.refresh_thread.finished.connect(self._on_refresh_done)
         self.refresh_thread.start()
     
     def _cleanup_threads(self):
         """Clean up finished threads from the _threads list"""
         before = len(self._threads)
-        finished = [t for t in self._threads if not t.isRunning()]
-        for t in finished:
-            t.deleteLater()
-        self._threads = [t for t in self._threads if t.isRunning()]
+        alive = []
+        for t in self._threads:
+            try:
+                if t.isRunning():
+                    alive.append(t)
+                # Don't call deleteLater — just drop the reference and let Python GC handle it
+            except RuntimeError:
+                pass  # C++ object already deleted
+        self._threads = alive
         after = len(self._threads)
         print(f"[ZecNode] Thread cleanup: {before - after} cleaned, {after} still running")
     
-    def _on_refresh_done(self, status, has_internet, ssd, sd):
+    def _on_refresh_done(self, status, has_internet, ssd, sd, lwd_running, zebra_version):
         """Handle refresh results from background thread"""
         # Exit if closing
         if self._closing:
             return
-        
+
         # Skip UI update if an action is in progress (stop/start/restart)
         if self._action_in_progress:
             return
-        
+
         # Status - check internet first, then running state
         if status.running and not has_internet:
             # Node is running but no internet
@@ -1390,10 +1429,9 @@ class DashboardWindow(QMainWindow):
             self.status_text.setText("Running")
             self.status_text.setStyleSheet("color: #4ade80; border: none; background: transparent;")
             self._update_tray_icon("running")
-            # Update Zebra version if it shows "latest" or "--"
-            current = self.zebra_version_label.text()
-            if "latest" in current or "--" in current or not self.zebra_version_label.isVisible():
-                self._update_zebra_version()
+            # Update Zebra version from pre-fetched value (no blocking call)
+            if zebra_version and zebra_version != "--":
+                self.zebra_version_label.setText(f"Zebra v{zebra_version}")
             self.zebra_version_label.setVisible(True)
         else:
             # Node is stopped
@@ -1402,69 +1440,68 @@ class DashboardWindow(QMainWindow):
             self.status_text.setStyleSheet("color: #ef4444; border: none; background: transparent;")
             self._update_tray_icon("stopped")
             self.zebra_version_label.setVisible(False)
-        
+
         # Stats (only updated when online)
         self.peers_card.set_value(str(status.peer_count))
         self.uptime_card.set_value(status.uptime)
-        
+
         # Disk usage
         self.ssd_card.set_value(ssd.split("/")[0].strip() if "/" in ssd else ssd)
         self.sd_card.set_value(sd.split("/")[0].strip() if "/" in sd else sd)
-        
+
         # Sync progress
         sync_pct = min(status.sync_percent, 100.0)
         # Show at least 1% on the bar if there's any progress
         bar_value = int(sync_pct) if sync_pct >= 1.0 else (1 if sync_pct > 0 else 0)
         self.sync_progress.setValue(bar_value)
-        self.sync_progress.repaint()
         self.sync_percent_label.setText(f"{sync_pct:.1f}%")
-        
+
         # Format block height with commas
         current = f"{status.current_height:,}" if status.current_height else "0"
-        
+
         if sync_pct >= 99.9:
             self.sync_height_label.setText(f"✓ Synced • Block {current}")
             self.sync_height_label.setStyleSheet("color: #4ade80; font-size: 10px; border: none; background: transparent;")
         else:
             self.sync_height_label.setText(f"Block {current}")
             self.sync_height_label.setStyleSheet("color: #888; font-size: 10px; border: none; background: transparent;")
-        
+
         # Buttons
         self.stop_btn.setVisible(status.running)
         self.start_btn.setVisible(not status.running)
         self.restart_btn.setEnabled(status.running)
-        
+
         self.tray_stop.setVisible(status.running)
         self.tray_start.setVisible(not status.running)
         self.tray_update_zebra.setEnabled(not status.running)
-        
-        # Lightwalletd status
-        self._update_lightwalletd_status(status)
-        
-        # Force UI to repaint
+
+        # Lightwalletd status (using pre-fetched lwd_running, no blocking calls)
+        self._update_lightwalletd_ui(status, lwd_running)
+
+        # Schedule repaint (non-blocking)
         self.update()
-        QApplication.processEvents()
     
-    def _update_lightwalletd_status(self, zebra_status):
-        """Update lightwalletd UI based on current state"""
-        lwd_running = self.node_manager.is_lightwalletd_running()
+    def _update_lightwalletd_ui(self, zebra_status, lwd_running):
+        """Update lightwalletd UI based on pre-fetched state (no blocking calls)"""
         lwd_enabled = self.config.get("lightwalletd_enabled", False)
         is_synced = zebra_status.running and zebra_status.sync_percent >= 99.9
-        
-        # Auto-start if enabled and Zebra is synced
+
+        # Auto-start/stop in background thread to avoid blocking UI
         if lwd_enabled and is_synced and not lwd_running:
-            success, _ = self.node_manager.start_lightwalletd()
-            lwd_running = success
-        
-        # Auto-stop if Zebra stops
-        if lwd_running and not zebra_status.running:
-            self.node_manager.stop_lightwalletd()
-            lwd_running = False
-        
+            self._run_in_thread(
+                lambda: self.node_manager.start_lightwalletd(),
+                lambda result: None  # next refresh will pick up the state
+            )
+        elif lwd_running and not zebra_status.running:
+            self._run_in_thread(
+                lambda: self.node_manager.stop_lightwalletd(),
+                lambda result: None
+            )
+
         # Skip lwd UI update if action in progress
         if self._lwd_action_in_progress:
             return
-        
+
         # Update UI
         if lwd_running:
             self.lwd_toggle.setChecked(True)
@@ -1521,24 +1558,29 @@ class DashboardWindow(QMainWindow):
         self._run_action("restart")
     
     def _run_action(self, action):
+        # Wait for any previous action thread to finish before starting a new one
+        if hasattr(self, 'action_thread') and self.action_thread is not None:
+            try:
+                if self.action_thread.isRunning():
+                    return  # Don't stack actions
+            except RuntimeError:
+                pass
         self.action_thread = NodeActionThread(action, self.node_manager)
         self.action_thread.finished.connect(self._on_action_done)
         self.action_thread.start()
-    
+
     def _on_action_done(self, ok, msg):
         # Clear action flag
         self._action_in_progress = False
-        
+
         # Re-enable buttons
         self.stop_btn.setEnabled(True)
         self.start_btn.setEnabled(True)
         self.restart_btn.setEnabled(True)
-        
-        # Clean up thread
-        if hasattr(self, 'action_thread'):
-            self.action_thread.deleteLater()
-            self.action_thread = None
-        
+
+        # Let the thread be cleaned up by _cleanup_threads (don't deleteLater here
+        # since we may still be inside the thread's signal emission)
+
         if not ok:
             QMessageBox.warning(self, "Error", msg)
         self._start_refresh()
@@ -1548,16 +1590,18 @@ class DashboardWindow(QMainWindow):
         if self._closing:
             return
             
-        if self.price_thread is not None and self.price_thread.isRunning():
-            return
-        
-        # Clean up old thread
+        try:
+            if self.price_thread is not None and self.price_thread.isRunning():
+                return
+        except RuntimeError:
+            self.price_thread = None
+
+        # Clean up old thread - just drop the reference
         if self.price_thread is not None:
             try:
                 self.price_thread.finished.disconnect()
             except:
                 pass
-            self.price_thread.deleteLater()
             self.price_thread = None
 
         self.price_thread = PriceThread()
@@ -1653,8 +1697,7 @@ class DashboardWindow(QMainWindow):
             else:
                 dialog = MessageDialog(self, "Update Complete", message, is_error=False)
                 dialog.exec_()
-                # Update Zebra version label after Zebra update
-                self._update_zebra_version()
+                # Zebra version will be updated on next refresh cycle
         else:
             dialog = MessageDialog(self, "Update Failed", message, is_error=True)
             dialog.exec_()
@@ -1664,27 +1707,13 @@ class DashboardWindow(QMainWindow):
     def _toggle_lightwalletd(self):
         """Toggle lightwalletd on/off"""
         if self.lwd_toggle.isChecked():
-            # Check if Zebra is synced
-            status = self.node_manager.get_status()
-            if not status.running:
-                self.lwd_toggle.setChecked(False)
-                self.lwd_status.setText("Requires running node")
-                self.lwd_status.setStyleSheet("color: #f59e0b; font-size: 12px; border: none; background: transparent;")
-                return
-            
-            if status.sync_percent < 100:
-                self.lwd_toggle.setChecked(False)
-                self.lwd_status.setText(f"Requires synced node ({status.sync_percent:.1f}%)")
-                self.lwd_status.setStyleSheet("color: #f59e0b; font-size: 12px; border: none; background: transparent;")
-                return
-            
-            # Start lightwalletd in background thread
+            # Start lightwalletd in background thread (status check happens inside start_lightwalletd)
             self._lwd_action_in_progress = True
             self.lwd_toggle.setText("...")
             self.lwd_toggle.setEnabled(False)
             self.lwd_status.setText("Starting...")
             self.lwd_status.setStyleSheet("color: #f4b728; font-size: 12px; border: none; background: transparent;")
-            
+
             def start_lwd():
                 success, msg = self.node_manager.start_lightwalletd()
                 return success, msg
@@ -1741,12 +1770,8 @@ class DashboardWindow(QMainWindow):
                 result = self.fn()
                 self.finished.emit(result)
 
-        # Prune finished threads before adding new ones
-        self._threads = [t for t in self._threads if t.isRunning()]
-
         thread = WorkerThread(func)
         thread.finished.connect(callback)
-        thread.finished.connect(lambda: thread.deleteLater())
         thread.start()
         self._threads.append(thread)
     
