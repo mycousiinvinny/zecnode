@@ -1,6 +1,6 @@
 # v2.0.0 - March 9th 2026
 
-- Fixed major freeze after closing dashboard. Caused by zombie Qthread buildup
+- Fixed major freeze after closing dashboard. Caused by zombie Qthread buildup. STILL TESTING
 
 # v2.0.0 - February 20th 2026
 
