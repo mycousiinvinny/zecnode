@@ -38,6 +38,6 @@ Right click the green circle at the top right of your screen. Click "Update ZecN
 
 Yes! Your node will run in the background.
 
-## What happens if my power goes out and my computer shuts off?
+## What happens if my computer shuts off?
 
-As long as your node was running when your power went out or your computer turned off, it will automatically start the node back up when computer turns back on. Keep in mind, if your node was stopped for any reason prior to a reboot, it will not auto start. Node running when reboot = auto start on reboot. Node stopped when reboot = no auto start on reboot. 
+As long as your node was running when your computer turned off, it will automatically start the node back up when your computer turns back on. Keep in mind, if your node was stopped for any reason prior to being turned off, it will not auto start. Node running when reboot = auto start on reboot. Node stopped when reboot = no auto start on reboot. 
