@@ -40,4 +40,4 @@ Yes! Your node will run in the background.
 
 ## What happens if my power goes out and my computer shuts off?
 
-As long as your node was running when your power went out or your computer turned off, it will automatically start the node back up. Keep in mind, if your node was stopped for any reason prior to a reboot, it will not auto start. Node running when reboot = auto start on reboot. Node stopped when reboot = no auto start on reboot. 
+As long as your node was running when your power went out or your computer turned off, it will automatically start the node back up when computer turns back on. Keep in mind, if your node was stopped for any reason prior to a reboot, it will not auto start. Node running when reboot = auto start on reboot. Node stopped when reboot = no auto start on reboot. 
