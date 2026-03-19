@@ -1,3 +1,33 @@
+# v2.1.0 - March 18th 2026 - Performance & Stability
+
+ - Fixed freeze on quit — replaced SIGKILL with clean Qt shutdown
+   
+ - Reduced refresh interval from 3s to 10s
+    
+ - Price updates changed from 30s to 120s
+   
+ - Disk usage checks reduced to every 60s instead of every refresh
+   
+ - Internet check cached, re-checked every 60s
+   
+ - Zebra version fetched once on node start instead of every refresh
+   
+ - Docker logs reduced from 200 to 30 lines per status check
+   
+ - Docker inspect (uptime) cached instead of querying every refresh
+   
+ - Tray icon only redrawn when state changes
+   
+ - Removed redundant widget repaint on every refresh
+   
+ - Fixed lightwalletd thread spam — limited to one auto-start/stop attempt at a time
+   
+ - Threads cleaned up immediately on finish instead of every 30 minutes
+   
+ - Lightwalletd now starts/stops with the node instead of waiting for next refresh
+   
+ - Sync progress and block height cached — no more 0% after stop/start or reboot
+
 # v2.0.0 - March 9th 2026
 
 - Fixed major freeze after closing dashboard. Caused by zombie Qthread buildup. STILL TESTING
