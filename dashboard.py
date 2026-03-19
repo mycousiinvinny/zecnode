@@ -60,19 +60,32 @@ class PriceThread(QThread):
 class NodeActionThread(QThread):
     """Background thread for node operations"""
     finished = pyqtSignal(bool, str)
-    
-    def __init__(self, action, node_manager):
+
+    def __init__(self, action, node_manager, lwd_enabled=False):
         super().__init__()
         self.action = action
         self.node_manager = node_manager
-    
+        self.lwd_enabled = lwd_enabled
+
     def run(self):
         if self.action == "start":
             ok, msg = self.node_manager.start_node()
+            # Auto-start lightwalletd if enabled and node started successfully
+            if ok and self.lwd_enabled:
+                self.node_manager.start_lightwalletd()
         elif self.action == "stop":
+            # Stop lightwalletd first if running
+            if self.node_manager.is_lightwalletd_running():
+                self.node_manager.stop_lightwalletd()
             ok, msg = self.node_manager.stop_node()
         elif self.action == "restart":
+            # Stop lightwalletd before restart, start after if enabled
+            lwd_was_running = self.node_manager.is_lightwalletd_running()
+            if lwd_was_running:
+                self.node_manager.stop_lightwalletd()
             ok, msg = self.node_manager.restart_node()
+            if ok and (self.lwd_enabled or lwd_was_running):
+                self.node_manager.start_lightwalletd()
         else:
             ok, msg = False, "Unknown action"
         self.finished.emit(ok, msg)
@@ -80,7 +93,14 @@ class NodeActionThread(QThread):
 
 class RefreshThread(QThread):
     """Background thread for fetching node status without blocking UI"""
-    finished = pyqtSignal(object, bool, str, str, bool, str)  # status, has_internet, ssd, sd, lwd_running, zebra_version
+    finished = pyqtSignal(object, bool, str, str, bool)  # status, has_internet, ssd, sd, lwd_running
+
+    # Cached internet status shared across instances
+    _cached_internet = True
+    _last_internet_check = 0
+    _cached_ssd = "--"
+    _cached_sd = "--"
+    _last_disk_check = 0
 
     def __init__(self, node_manager, config=None):
         super().__init__()
@@ -95,8 +115,13 @@ class RefreshThread(QThread):
         if not self._running:
             return
 
-        # Check internet
-        has_internet = check_internet()
+        # Check internet (only re-check every 60 seconds)
+        import time
+        now = time.monotonic()
+        if now - RefreshThread._last_internet_check >= 60:
+            RefreshThread._cached_internet = check_internet()
+            RefreshThread._last_internet_check = now
+        has_internet = RefreshThread._cached_internet
 
         if not self._running:
             return
@@ -107,8 +132,11 @@ class RefreshThread(QThread):
         if not self._running:
             return
 
-        # Get disk usage
-        ssd, sd = self.node_manager.get_disk_usage()
+        # Get disk usage (only re-check every 60 seconds)
+        if now - RefreshThread._last_disk_check >= 60:
+            RefreshThread._cached_ssd, RefreshThread._cached_sd = self.node_manager.get_disk_usage()
+            RefreshThread._last_disk_check = now
+        ssd, sd = RefreshThread._cached_ssd, RefreshThread._cached_sd
 
         if not self._running:
             return
@@ -119,13 +147,7 @@ class RefreshThread(QThread):
         if not self._running:
             return
 
-        # Get zebra version (was previously blocking main thread via docker exec)
-        zebra_version = self.node_manager.get_zebra_version(self.config) if status.running else "--"
-
-        if not self._running:
-            return
-
-        self.finished.emit(status, has_internet, ssd, sd, lwd_running, zebra_version)
+        self.finished.emit(status, has_internet, ssd, sd, lwd_running)
 
 
 class LogsDialog(QDialog):
@@ -791,6 +813,7 @@ class DashboardWindow(QMainWindow):
         self.node_manager = NodeManager(config.get_data_path(), zebra_version=zebra_version)
         self._centered = False
         self._drag_pos = None
+        self._tray_state = None
         
         self.setWindowTitle("ZecNode")
         self.setWindowFlags(Qt.FramelessWindowHint)
@@ -803,27 +826,25 @@ class DashboardWindow(QMainWindow):
         
         self.timer = QTimer()
         self.timer.timeout.connect(self._start_refresh)
-        self.timer.start(3000)  # 3 seconds
+        self.timer.start(10000)  # 10 seconds
         self._action_in_progress = False
         self._lwd_action_in_progress = False
+        self._lwd_auto_action_in_progress = False
         self._closing = False
         self.refresh_thread = None
+        self._cached_zebra_version = None
+        self._zebra_version_fetched = False
         self._start_refresh()
         
-        # Price timer - update every 30 seconds
+        # Price timer - update every 120 seconds
         self.price_thread = None
         self.price_timer = QTimer()
         self.price_timer.timeout.connect(self._fetch_price)
-        self.price_timer.start(30000)
+        self.price_timer.start(120000)
         self._fetch_price()
         
         # Track all threads for cleanup
         self._threads = []
-
-        # Cleanup timer - garbage collect every 30 min to prevent zombie thread buildup
-        self.cleanup_timer = QTimer()
-        self.cleanup_timer.timeout.connect(self._cleanup_threads)
-        self.cleanup_timer.start(1800000)  # 30 minutes
     
     def mousePressEvent(self, event):
         """Enable dragging the window"""
@@ -1333,6 +1354,9 @@ class DashboardWindow(QMainWindow):
     
     def _update_tray_icon(self, state: str):
         """Update tray icon - state can be 'running', 'stopped', or 'no_internet'"""
+        if state == self._tray_state:
+            return
+        self._tray_state = state
         pm = QPixmap(32, 32)
         pm.fill(Qt.transparent)
         painter = QPainter(pm)
@@ -1387,22 +1411,14 @@ class DashboardWindow(QMainWindow):
         self.refresh_thread.finished.connect(self._on_refresh_done)
         self.refresh_thread.start()
     
-    def _cleanup_threads(self):
-        """Clean up finished threads from the _threads list"""
-        before = len(self._threads)
-        alive = []
-        for t in self._threads:
-            try:
-                if t.isRunning():
-                    alive.append(t)
-                # Don't call deleteLater — just drop the reference and let Python GC handle it
-            except RuntimeError:
-                pass  # C++ object already deleted
-        self._threads = alive
-        after = len(self._threads)
-        print(f"[ZecNode] Thread cleanup: {before - after} cleaned, {after} still running")
+    def _remove_thread(self, thread):
+        """Remove a finished thread from the tracking list"""
+        try:
+            self._threads.remove(thread)
+        except ValueError:
+            pass
     
-    def _on_refresh_done(self, status, has_internet, ssd, sd, lwd_running, zebra_version):
+    def _on_refresh_done(self, status, has_internet, ssd, sd, lwd_running):
         """Handle refresh results from background thread"""
         # Exit if closing
         if self._closing:
@@ -1429,9 +1445,11 @@ class DashboardWindow(QMainWindow):
             self.status_text.setText("Running")
             self.status_text.setStyleSheet("color: #4ade80; border: none; background: transparent;")
             self._update_tray_icon("running")
-            # Update Zebra version from pre-fetched value (no blocking call)
-            if zebra_version and zebra_version != "--":
-                self.zebra_version_label.setText(f"Zebra v{zebra_version}")
+            # Fetch Zebra version once (only on first detection of running node)
+            if not self._zebra_version_fetched:
+                self._fetch_zebra_version()
+            if self._cached_zebra_version:
+                self.zebra_version_label.setText(f"Zebra v{self._cached_zebra_version}")
             self.zebra_version_label.setVisible(True)
         else:
             # Node is stopped
@@ -1440,6 +1458,8 @@ class DashboardWindow(QMainWindow):
             self.status_text.setStyleSheet("color: #ef4444; border: none; background: transparent;")
             self._update_tray_icon("stopped")
             self.zebra_version_label.setVisible(False)
+            # Reset so version is re-fetched when node starts again
+            self._zebra_version_fetched = False
 
         # Stats (only updated when online)
         self.peers_card.set_value(str(status.peer_count))
@@ -1449,15 +1469,26 @@ class DashboardWindow(QMainWindow):
         self.ssd_card.set_value(ssd.split("/")[0].strip() if "/" in ssd else ssd)
         self.sd_card.set_value(sd.split("/")[0].strip() if "/" in sd else sd)
 
-        # Sync progress
+        # Sync progress — use cached values if node hasn't reported yet
         sync_pct = min(status.sync_percent, 100.0)
+        current_height = status.current_height
+
+        if sync_pct > 0 or current_height > 0:
+            # Real data from logs — cache it
+            self.config.set("cached_sync_percent", sync_pct)
+            self.config.set("cached_height", current_height)
+        elif status.running:
+            # Node running but no data yet — use cached values
+            sync_pct = self.config.get("cached_sync_percent", 0.0)
+            current_height = self.config.get("cached_height", 0)
+
         # Show at least 1% on the bar if there's any progress
         bar_value = int(sync_pct) if sync_pct >= 1.0 else (1 if sync_pct > 0 else 0)
         self.sync_progress.setValue(bar_value)
         self.sync_percent_label.setText(f"{sync_pct:.1f}%")
 
         # Format block height with commas
-        current = f"{status.current_height:,}" if status.current_height else "0"
+        current = f"{current_height:,}" if current_height else "0"
 
         if sync_pct >= 99.9:
             self.sync_height_label.setText(f"✓ Synced • Block {current}")
@@ -1477,9 +1508,6 @@ class DashboardWindow(QMainWindow):
 
         # Lightwalletd status (using pre-fetched lwd_running, no blocking calls)
         self._update_lightwalletd_ui(status, lwd_running)
-
-        # Schedule repaint (non-blocking)
-        self.update()
     
     def _update_lightwalletd_ui(self, zebra_status, lwd_running):
         """Update lightwalletd UI based on pre-fetched state (no blocking calls)"""
@@ -1487,16 +1515,20 @@ class DashboardWindow(QMainWindow):
         is_synced = zebra_status.running and zebra_status.sync_percent >= 99.9
 
         # Auto-start/stop in background thread to avoid blocking UI
-        if lwd_enabled and is_synced and not lwd_running:
-            self._run_in_thread(
-                lambda: self.node_manager.start_lightwalletd(),
-                lambda result: None  # next refresh will pick up the state
-            )
-        elif lwd_running and not zebra_status.running:
-            self._run_in_thread(
-                lambda: self.node_manager.stop_lightwalletd(),
-                lambda result: None
-            )
+        # Only one auto action at a time to prevent thread spam
+        if not self._lwd_auto_action_in_progress:
+            if lwd_enabled and is_synced and not lwd_running:
+                self._lwd_auto_action_in_progress = True
+                self._run_in_thread(
+                    lambda: self.node_manager.start_lightwalletd(),
+                    lambda result: setattr(self, '_lwd_auto_action_in_progress', False)
+                )
+            elif lwd_running and not zebra_status.running:
+                self._lwd_auto_action_in_progress = True
+                self._run_in_thread(
+                    lambda: self.node_manager.stop_lightwalletd(),
+                    lambda result: setattr(self, '_lwd_auto_action_in_progress', False)
+                )
 
         # Skip lwd UI update if action in progress
         if self._lwd_action_in_progress:
@@ -1565,7 +1597,8 @@ class DashboardWindow(QMainWindow):
                     return  # Don't stack actions
             except RuntimeError:
                 pass
-        self.action_thread = NodeActionThread(action, self.node_manager)
+        lwd_enabled = self.config.get("lightwalletd_enabled", False)
+        self.action_thread = NodeActionThread(action, self.node_manager, lwd_enabled)
         self.action_thread.finished.connect(self._on_action_done)
         self.action_thread.start()
 
@@ -1585,6 +1618,20 @@ class DashboardWindow(QMainWindow):
             QMessageBox.warning(self, "Error", msg)
         self._start_refresh()
     
+    def _fetch_zebra_version(self):
+        """Fetch Zebra version once in a background thread"""
+        self._zebra_version_fetched = True
+
+        def get_version():
+            return self.node_manager.get_zebra_version(self.config)
+
+        def on_version_done(version):
+            if version and version != "--":
+                self._cached_zebra_version = version
+                self.zebra_version_label.setText(f"Zebra v{version}")
+
+        self._run_in_thread(get_version, on_version_done)
+
     def _fetch_price(self):
         """Start background price fetch"""
         if self._closing:
@@ -1772,6 +1819,7 @@ class DashboardWindow(QMainWindow):
 
         thread = WorkerThread(func)
         thread.finished.connect(callback)
+        thread.finished.connect(lambda: self._remove_thread(thread))
         thread.start()
         self._threads.append(thread)
     
@@ -1813,13 +1861,7 @@ class DashboardWindow(QMainWindow):
             os.execv(sys.executable, [sys.executable, os.path.expanduser("~/zecnode/main.py")])
     
     def _shutdown(self):
-        """Common shutdown logic for both _quit and closeEvent.
-
-        Uses a hard kill approach: stop timers, hide tray, then immediately
-        terminate the process. Trying to gracefully wait for threads that are
-        blocked on subprocess calls (docker, df) can hang indefinitely and
-        freeze the system.
-        """
+        """Clean shutdown: stop timers, let Qt clean up resources, with a safety fallback."""
         # Prevent re-entry
         if self._closing:
             return
@@ -1829,23 +1871,20 @@ class DashboardWindow(QMainWindow):
 
         # Stop all timers so no new threads are spawned
         self.timer.stop()
-        self.cleanup_timer.stop()
         self.price_timer.stop()
 
-        # Tell refresh thread to stop (so it exits between subprocess calls)
+        # Tell refresh thread to stop
         if self.refresh_thread is not None:
             self.refresh_thread.stop()
 
-        # Hide tray icon before killing
+        # Hide tray icon
         self.tray.hide()
-        QApplication.processEvents()
 
-        # Hard kill immediately - don't wait for threads that may be blocked
-        # on subprocess calls (docker logs, df, socket connections).
-        # os._exit skips cleanup but that's fine - we have no resources
-        # that require graceful shutdown beyond the tray icon above.
-        print("[ZecNode] Exiting.")
-        os.kill(os.getpid(), signal.SIGKILL)
+        # Safety fallback — if clean shutdown hangs, force exit after 3 seconds
+        QTimer.singleShot(3000, lambda: os._exit(0))
+
+        # Clean Qt shutdown (releases GPU/display resources properly)
+        QApplication.quit()
 
     def _quit(self):
         self._shutdown()

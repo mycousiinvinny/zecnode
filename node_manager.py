@@ -60,6 +60,8 @@ class NodeManager:
     # Zcash mainnet approximate current height
     ESTIMATED_TARGET_HEIGHT = 3_200_000
     
+    _cached_started_at = None
+
     def __init__(self, data_path: Optional[Path] = None, zebra_version: str = "3.1.0"):
         self.data_path = data_path or Path(self.MOUNT_PATH)
         self.zebra_version = zebra_version
@@ -1071,25 +1073,28 @@ gsettings set org.gnome.desktop.session idle-delay 0 2>/dev/null || true
             )
             
             status.running = bool(result.stdout.strip())
-            
+
             if not status.running:
+                self._cached_started_at = None
                 return status
-            
-            # Get container uptime
-            result = subprocess.run(
-                ["docker", "inspect", "-f", "{{.State.StartedAt}}", self.CONTAINER_NAME],
-                capture_output=True,
-                text=True,
-                timeout=5
-            )
-            
-            if result.returncode == 0:
-                started_at = result.stdout.strip()
-                status.uptime = self._calculate_uptime(started_at)
+
+            # Get container uptime (cache StartedAt since it never changes while running)
+            if self._cached_started_at is None:
+                result = subprocess.run(
+                    ["docker", "inspect", "-f", "{{.State.StartedAt}}", self.CONTAINER_NAME],
+                    capture_output=True,
+                    text=True,
+                    timeout=5
+                )
+                if result.returncode == 0:
+                    self._cached_started_at = result.stdout.strip()
+
+            if self._cached_started_at:
+                status.uptime = self._calculate_uptime(self._cached_started_at)
             
             # Get logs
             result = subprocess.run(
-                ["docker", "logs", "--tail", "200", self.CONTAINER_NAME],
+                ["docker", "logs", "--tail", "30", self.CONTAINER_NAME],
                 capture_output=True,
                 text=True,
                 timeout=10
