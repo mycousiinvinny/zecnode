@@ -20,7 +20,7 @@ Not recommended. The Zcash blockchain requires fast random reads/writes. An HDD 
 
 ## What's the minimum SSD size?
 
-500GB recommended. The blockchain is currently around 100GB and growing.
+1 TB is recommended. 500 GB will work. The blockchain is currently around 285GB and growing.
 
 ## Can I run this on something other than a Raspberry Pi?
 
@@ -32,8 +32,12 @@ Open the dashboard - when sync progress shows 100% and displays "✓ Synced", yo
 
 ## How do I update ZecNode?
 
-Run the install command again. It will update the app files without touching your blockchain data.
+Right click the green circle at the top right of your screen. Click "Update ZecNode". That's it!
 
 ## Will my node still run if I close the dashboard?
 
 Yes! Your node will run in the background.
+
+## What happens if my power goes out and my computer shuts off?
+
+As long as your node was running when your power went out or your computer turned off, it will automatically start the node back up. Keep in mind, if your node was stopped for any reason prior to a reboot, it will not auto start. Node running when reboot = auto start on reboot. Node stopped when reboot = no auto start on reboot. 
