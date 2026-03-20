@@ -1,0 +1,859 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>ZecNode Dashboard</title>
+    <script src="https://unpkg.com/maplibre-gl@4.1.2/dist/maplibre-gl.js"></script>
+    <link href="https://unpkg.com/maplibre-gl@4.1.2/dist/maplibre-gl.css" rel="stylesheet" />
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', 'SF Pro Display', 'Ubuntu', sans-serif;
+            background-color: #0f0f14;
+            color: #e8e8e8;
+            overflow: hidden;
+            touch-action: manipulation;
+        }
+
+        #map {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+
+        .control-panel {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            width: 320px;
+            max-width: calc(100% - 40px);
+            background: rgba(15, 15, 20, 0.95);
+            border: 1px solid #333;
+            border-radius: 12px;
+            padding: 20px;
+            backdrop-filter: blur(10px);
+            z-index: 1000;
+            transition: transform 0.3s ease, opacity 0.3s ease;
+        }
+
+        .control-panel.collapsed {
+            transform: translateY(calc(100% - 60px));
+        }
+
+        .panel-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 16px;
+            cursor: pointer;
+        }
+
+        .panel-header h1 {
+            color: #f4b728;
+            font-size: 20px;
+            font-weight: 600;
+        }
+
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-left: 10px;
+        }
+
+        .status-dot.running {
+            background: #4ade80;
+            box-shadow: 0 0 8px #4ade80;
+        }
+
+        .status-dot.stopped {
+            background: #ef4444;
+        }
+
+        .collapse-icon {
+            margin-left: auto;
+            color: #888;
+            font-size: 20px;
+            transition: transform 0.3s ease;
+        }
+
+        .control-panel.collapsed .collapse-icon {
+            transform: rotate(180deg);
+        }
+
+        .panel-content {
+            overflow: hidden;
+            transition: max-height 0.3s ease, opacity 0.3s ease;
+            max-height: 500px;
+            opacity: 1;
+        }
+
+        .control-panel.collapsed .panel-content {
+            max-height: 0;
+            opacity: 0;
+        }
+
+        .stat-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid #222;
+        }
+
+        .stat-row:last-of-type {
+            border-bottom: none;
+        }
+
+        .stat-label {
+            color: #888;
+            font-size: 13px;
+        }
+
+        .stat-value {
+            color: #e8e8e8;
+            font-size: 13px;
+            font-weight: 500;
+        }
+
+        .stat-value.synced {
+            color: #4ade80;
+        }
+
+        .button-row {
+            display: flex;
+            gap: 10px;
+            margin-top: 16px;
+        }
+
+        .btn {
+            flex: 1;
+            padding: 12px 16px;
+            border: none;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        .btn:active {
+            transform: scale(0.95);
+        }
+
+        .btn-primary {
+            background: #f4b728;
+            color: #0f0f14;
+        }
+
+        .btn-primary:hover, .btn-primary:active {
+            background: #ffc942;
+        }
+
+        .btn-secondary {
+            background: #1e1e28;
+            color: #e8e8e8;
+            border: 1px solid #333;
+        }
+
+        .btn-secondary:hover, .btn-secondary:active {
+            background: #28283a;
+            border-color: #444;
+        }
+
+        .btn-danger {
+            background: #dc2626;
+            color: white;
+        }
+
+        .btn-danger:hover, .btn-danger:active {
+            background: #ef4444;
+        }
+
+        .lightwalletd-section {
+            margin-top: 16px;
+            padding-top: 16px;
+            border-top: 1px solid #333;
+        }
+
+        .toggle-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .toggle {
+            position: relative;
+            width: 44px;
+            height: 24px;
+            background: #333;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: background 0.2s;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        .toggle.active {
+            background: #f4b728;
+        }
+
+        .toggle::after {
+            content: '';
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            width: 20px;
+            height: 20px;
+            background: white;
+            border-radius: 50%;
+            transition: transform 0.2s;
+        }
+
+        .toggle.active::after {
+            transform: translateX(20px);
+        }
+
+        .lwd-url {
+            margin-top: 10px;
+            padding: 10px 12px;
+            background: #1a1a24;
+            border-radius: 6px;
+            font-family: monospace;
+            font-size: 11px;
+            color: #4ade80;
+            word-break: break-all;
+            cursor: pointer;
+            position: relative;
+        }
+
+        .lwd-url:active {
+            background: #252530;
+        }
+
+        .lwd-url .copy-hint {
+            position: absolute;
+            right: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #888;
+            font-size: 10px;
+        }
+
+        /* Custom map markers */
+        .node-marker {
+            width: 10px !important;
+            height: 10px !important;
+            background-color: #f4b728 !important;
+            border-radius: 50% !important;
+            cursor: pointer;
+            box-shadow: 0 0 8px rgba(244, 183, 40, 0.7);
+            border: none !important;
+            display: block !important;
+            min-width: 10px !important;
+            min-height: 10px !important;
+        }
+
+        .node-marker:hover {
+            width: 12px !important;
+            height: 12px !important;
+            min-width: 12px !important;
+            min-height: 12px !important;
+            box-shadow: 0 0 12px rgba(244, 183, 40, 0.9);
+        }
+
+        /* Your node - larger and pulsing */
+        .node-marker.self-node {
+            width: 14px !important;
+            height: 14px !important;
+            min-width: 14px !important;
+            min-height: 14px !important;
+            background-color: #4ade80 !important;
+            box-shadow: 0 0 12px rgba(74, 222, 128, 0.8);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { box-shadow: 0 0 8px rgba(74, 222, 128, 0.8); }
+            50% { box-shadow: 0 0 20px rgba(74, 222, 128, 1); }
+            100% { box-shadow: 0 0 8px rgba(74, 222, 128, 0.8); }
+        }
+
+        /* Hide default MapLibre marker */
+        .maplibregl-marker {
+            background: none !important;
+            border: none !important;
+        }
+
+        .maplibregl-popup-content {
+            background: #1a1a24 !important;
+            color: #e8e8e8 !important;
+            border: 1px solid #333 !important;
+            border-radius: 8px !important;
+            padding: 12px !important;
+            font-family: 'Segoe UI', 'SF Pro Display', 'Ubuntu', sans-serif;
+        }
+
+        .maplibregl-popup-tip {
+            border-top-color: #1a1a24 !important;
+        }
+
+        .maplibregl-popup-close-button {
+            color: #888 !important;
+            font-size: 18px !important;
+            padding: 4px 8px !important;
+        }
+
+        .popup-title {
+            color: #f4b728;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+
+        .popup-info {
+            font-size: 12px;
+            color: #888;
+        }
+
+        /* Toast notification */
+        .toast {
+            position: fixed;
+            bottom: 100px;
+            left: 50%;
+            transform: translateX(-50%) translateY(100px);
+            background: #1a1a24;
+            border: 1px solid #4ade80;
+            color: #e8e8e8;
+            padding: 12px 24px;
+            border-radius: 8px;
+            z-index: 2000;
+            opacity: 0;
+            transition: all 0.3s ease;
+        }
+
+        .toast.show {
+            transform: translateX(-50%) translateY(0);
+            opacity: 1;
+        }
+
+        /* Logs modal */
+        .logs-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 3000;
+            padding: 10px;
+        }
+
+        .logs-content {
+            background: #0f0f14;
+            border: 1px solid #333;
+            border-radius: 12px;
+            width: 100%;
+            max-width: 800px;
+            max-height: 90vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .logs-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px 20px;
+            border-bottom: 1px solid #333;
+            flex-shrink: 0;
+        }
+
+        .logs-header h2 {
+            color: #f4b728;
+            font-size: 18px;
+            margin: 0;
+        }
+
+        .logs-close {
+            background: #333;
+            border: none;
+            color: #fff;
+            font-size: 20px;
+            cursor: pointer;
+            padding: 8px 14px;
+            border-radius: 8px;
+            line-height: 1;
+        }
+
+        .logs-close:hover {
+            background: #444;
+        }
+
+        .logs-text {
+            padding: 16px 20px;
+            margin: 0;
+            overflow: auto;
+            font-family: 'JetBrains Mono', 'Consolas', monospace;
+            font-size: 11px;
+            color: #4ade80;
+            background: #0a0a0f;
+            white-space: pre-wrap;
+            word-break: break-all;
+            flex: 1;
+            min-height: 0;
+        }
+
+        @media (max-width: 480px) {
+            .logs-modal {
+                padding: 5px;
+            }
+
+            .logs-content {
+                max-height: 95vh;
+                border-radius: 8px;
+            }
+
+            .logs-header {
+                padding: 12px 16px;
+            }
+
+            .logs-header h2 {
+                font-size: 16px;
+            }
+
+            .logs-close {
+                padding: 10px 16px;
+                font-size: 18px;
+            }
+
+            .logs-text {
+                font-size: 10px;
+                padding: 12px;
+            }
+        }
+
+        /* Mobile adjustments */
+        @media (max-width: 480px) {
+            .control-panel {
+                bottom: 10px;
+                left: 10px;
+                right: 10px;
+                width: auto;
+                max-width: none;
+                padding: 16px;
+            }
+
+            .panel-header h1 {
+                font-size: 18px;
+            }
+
+            .btn {
+                padding: 14px 12px;
+                font-size: 12px;
+            }
+
+            .stat-label, .stat-value {
+                font-size: 12px;
+            }
+
+            .lwd-url {
+                font-size: 10px;
+                padding: 12px;
+            }
+
+            .maplibregl-ctrl-group {
+                margin: 10px !important;
+            }
+        }
+
+        /* Landscape mobile */
+        @media (max-height: 500px) {
+            .control-panel {
+                max-height: calc(100vh - 40px);
+                overflow-y: auto;
+            }
+
+            .panel-content {
+                max-height: 300px;
+            }
+        }
+
+        /* Hide MapLibre logo and attribution on mobile for cleaner look */
+        @media (max-width: 480px) {
+            .maplibregl-ctrl-attrib {
+                display: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+
+    <div class="control-panel" id="controlPanel">
+        <div class="panel-header" id="panelHeader">
+            <h1>ZecNode</h1>
+            <div class="status-dot running" id="statusDot"></div>
+            <span class="collapse-icon">▼</span>
+        </div>
+
+        <div class="panel-content">
+            <div class="stat-row">
+                <span class="stat-label">Status</span>
+                <span class="stat-value" id="nodeStatus">Running</span>
+            </div>
+
+            <div class="stat-row">
+                <span class="stat-label">Sync Progress</span>
+                <span class="stat-value synced" id="syncProgress">100%</span>
+            </div>
+
+            <div class="stat-row">
+                <span class="stat-label">Block Height</span>
+                <span class="stat-value" id="blockHeight">2,847,523</span>
+            </div>
+
+            <div class="stat-row">
+                <span class="stat-label">Peers</span>
+                <span class="stat-value" id="peerCount">8</span>
+            </div>
+
+            <div class="stat-row">
+                <span class="stat-label">Uptime</span>
+                <span class="stat-value" id="uptime">3d 14h 22m</span>
+            </div>
+
+            <div class="button-row">
+                <button class="btn btn-danger" id="stopBtn">Stop</button>
+                <button class="btn btn-secondary" id="restartBtn">Restart</button>
+                <button class="btn btn-secondary" id="logsBtn">Logs</button>
+            </div>
+
+            <div class="lightwalletd-section">
+                <div class="toggle-row">
+                    <span class="stat-label">Lightwalletd</span>
+                    <div class="toggle active" id="lwdToggle"></div>
+                </div>
+                <div class="lwd-url" id="lwdUrl">
+                    http://192.168.1.100:9067
+                    <span class="copy-hint">tap to copy</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="toast" id="toast">Copied to clipboard!</div>
+
+    <script>
+        // API base URL - same host, port 5000
+        const API_BASE = window.location.port === '5000' ? '' : `http://${window.location.hostname}:5000`;
+
+        // Initialize dark map
+        const map = new maplibregl.Map({
+            container: 'map',
+            style: {
+                version: 8,
+                sources: {
+                    'carto-dark': {
+                        type: 'raster',
+                        tiles: [
+                            'https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png',
+                            'https://b.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png',
+                            'https://c.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png'
+                        ],
+                        tileSize: 256,
+                        attribution: '&copy; <a href="https://carto.com/">CARTO</a>'
+                    }
+                },
+                layers: [{
+                    id: 'carto-dark-layer',
+                    type: 'raster',
+                    source: 'carto-dark',
+                    minzoom: 0,
+                    maxzoom: 19
+                }]
+            },
+            center: [-40, 30],
+            zoom: 1.5
+        });
+
+        // Fetch and display nodes on map
+        async function loadNodes() {
+            try {
+                // First load this node (self)
+                try {
+                    const selfResponse = await fetch(`${API_BASE}/api/nodes/self`);
+                    const selfData = await selfResponse.json();
+
+                    if (selfData.success && selfData.node.lat && selfData.node.lng) {
+                        const node = selfData.node;
+
+                        const el = document.createElement('div');
+                        el.className = 'node-marker self-node';
+
+                        const popup = new maplibregl.Popup({ offset: 25, closeButton: true })
+                            .setHTML(`
+                                <div class="popup-title">${node.name} (You)</div>
+                                <div class="popup-info">${node.city}, ${node.country}</div>
+                                <div class="popup-info">Status: ${node.status}</div>
+                                <div class="popup-info">Sync: ${node.sync.toFixed(1)}%</div>
+                                ${node.lwd_url ? `<div class="popup-info">LWD: ${node.lwd_url}</div>` : ''}
+                            `);
+
+                        new maplibregl.Marker({ element: el })
+                            .setLngLat([node.lng, node.lat])
+                            .setPopup(popup)
+                            .addTo(map);
+
+                        // Center map on this node
+                        map.flyTo({ center: [node.lng, node.lat], zoom: 2 });
+                    }
+                } catch (e) {
+                    console.log('Could not load self node:', e);
+                }
+
+            } catch (error) {
+                console.error('Failed to load nodes:', error);
+            }
+        }
+
+        // Fetch node status
+        async function fetchStatus() {
+            try {
+                const response = await fetch(`${API_BASE}/api/status`);
+                const data = await response.json();
+
+                // Update UI
+                const statusDot = document.getElementById('statusDot');
+                const nodeStatus = document.getElementById('nodeStatus');
+                const stopBtn = document.getElementById('stopBtn');
+
+                if (data.running) {
+                    statusDot.classList.remove('stopped');
+                    statusDot.classList.add('running');
+                    nodeStatus.textContent = 'Running';
+                    stopBtn.textContent = 'Stop';
+                    stopBtn.classList.remove('btn-primary');
+                    stopBtn.classList.add('btn-danger');
+                } else {
+                    statusDot.classList.remove('running');
+                    statusDot.classList.add('stopped');
+                    nodeStatus.textContent = 'Stopped';
+                    stopBtn.textContent = 'Start';
+                    stopBtn.classList.remove('btn-danger');
+                    stopBtn.classList.add('btn-primary');
+                }
+
+                document.getElementById('syncProgress').textContent = `${data.sync_percent.toFixed(1)}%`;
+                document.getElementById('blockHeight').textContent = data.current_height.toLocaleString();
+                document.getElementById('peerCount').textContent = data.peer_count;
+                document.getElementById('uptime').textContent = data.uptime;
+
+                // Lightwalletd
+                const lwdToggle = document.getElementById('lwdToggle');
+                const lwdUrl = document.getElementById('lwdUrl');
+
+                if (data.lightwalletd.running) {
+                    lwdToggle.classList.add('active');
+                    lwdUrl.innerHTML = `${data.lightwalletd.url}<span class="copy-hint">tap to copy</span>`;
+                } else {
+                    lwdToggle.classList.remove('active');
+                    lwdUrl.innerHTML = `Not running<span class="copy-hint"></span>`;
+                }
+
+            } catch (error) {
+                console.error('Failed to fetch status:', error);
+            }
+        }
+
+        // Control functions
+        function updateLwdUI(lwd) {
+            const lwdToggle = document.getElementById('lwdToggle');
+            const lwdUrl = document.getElementById('lwdUrl');
+            if (lwd.running) {
+                lwdToggle.classList.add('active');
+                lwdUrl.innerHTML = `${lwd.url}<span class="copy-hint">tap to copy</span>`;
+            } else {
+                lwdToggle.classList.remove('active');
+                lwdUrl.innerHTML = `Not running<span class="copy-hint"></span>`;
+            }
+        }
+
+        async function toggleNode() {
+            const statusDot = document.getElementById('statusDot');
+            const isRunning = statusDot.classList.contains('running');
+
+            const endpoint = isRunning ? '/api/stop' : '/api/start';
+
+            try {
+                showToast(isRunning ? 'Stopping node...' : 'Starting node...');
+                const response = await fetch(`${API_BASE}${endpoint}`, { method: 'POST' });
+                const data = await response.json();
+
+                if (data.success) {
+                    showToast(data.message);
+                    if (data.lightwalletd) updateLwdUI(data.lightwalletd);
+                    setTimeout(fetchStatus, 1000);
+                } else {
+                    showToast(`Error: ${data.message}`);
+                }
+            } catch (error) {
+                showToast('Failed to control node');
+            }
+        }
+
+        async function restartNode() {
+            try {
+                showToast('Restarting node...');
+                const response = await fetch(`${API_BASE}/api/restart`, { method: 'POST' });
+                const data = await response.json();
+
+                if (data.success) {
+                    showToast('Node restarted');
+                    if (data.lightwalletd) updateLwdUI(data.lightwalletd);
+                    setTimeout(fetchStatus, 2000);
+                } else {
+                    showToast(`Error: ${data.message}`);
+                }
+            } catch (error) {
+                showToast('Failed to restart node');
+            }
+        }
+
+        async function toggleLightwalletd() {
+            const lwdToggle = document.getElementById('lwdToggle');
+            const lwdUrl = document.getElementById('lwdUrl');
+            const isActive = lwdToggle.classList.contains('active');
+
+            // Update UI immediately
+            if (isActive) {
+                lwdToggle.classList.remove('active');
+                lwdUrl.innerHTML = `Not running<span class="copy-hint"></span>`;
+                showToast('Stopping lightwalletd...');
+            } else {
+                lwdToggle.classList.add('active');
+                showToast('Starting lightwalletd...');
+            }
+
+            try {
+                const response = await fetch(`${API_BASE}/api/lightwalletd/toggle`, { method: 'POST' });
+                const data = await response.json();
+
+                if (data.success) {
+                    showToast(data.running ? 'Lightwalletd started' : 'Lightwalletd stopped');
+                    if (data.running && data.url) {
+                        lwdToggle.classList.add('active');
+                        lwdUrl.innerHTML = `${data.url}<span class="copy-hint">tap to copy</span>`;
+                    } else {
+                        lwdToggle.classList.remove('active');
+                        lwdUrl.innerHTML = `Not running<span class="copy-hint"></span>`;
+                    }
+                } else {
+                    // Revert on failure
+                    showToast(`Error: ${data.message}`);
+                    if (isActive) {
+                        lwdToggle.classList.add('active');
+                    } else {
+                        lwdToggle.classList.remove('active');
+                    }
+                    fetchStatus();
+                }
+            } catch (error) {
+                showToast('Failed to toggle lightwalletd');
+                fetchStatus();
+            }
+        }
+
+        async function openLogs() {
+            try {
+                const response = await fetch(`${API_BASE}/api/logs?lines=50`);
+                const data = await response.json();
+
+                // Create logs modal
+                const modal = document.createElement('div');
+                modal.className = 'logs-modal';
+                modal.innerHTML = `
+                    <div class="logs-content">
+                        <div class="logs-header">
+                            <h2>Node Logs</h2>
+                            <button class="logs-close">&times;</button>
+                        </div>
+                        <pre class="logs-text">${data.logs}</pre>
+                    </div>
+                `;
+                document.body.appendChild(modal);
+
+                modal.querySelector('.logs-close').addEventListener('click', () => {
+                    modal.remove();
+                });
+
+                modal.addEventListener('click', (e) => {
+                    if (e.target === modal) modal.remove();
+                });
+
+            } catch (error) {
+                showToast('Failed to load logs');
+            }
+        }
+
+        // Panel collapse toggle
+        document.getElementById('panelHeader').addEventListener('click', function() {
+            document.getElementById('controlPanel').classList.toggle('collapsed');
+        });
+
+        // Lightwalletd toggle
+        document.getElementById('lwdToggle').addEventListener('click', function(e) {
+            e.stopPropagation();
+            toggleLightwalletd();
+        });
+
+        // Copy URL to clipboard
+        document.getElementById('lwdUrl').addEventListener('click', function() {
+            const url = this.textContent.replace('tap to copy', '').trim();
+            if (url && url !== 'Not running') {
+                navigator.clipboard.writeText(url).then(() => {
+                    showToast('Copied to clipboard!');
+                }).catch(() => {
+                    showToast('Failed to copy');
+                });
+            }
+        });
+
+        // Toast notification
+        function showToast(message) {
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.classList.add('show');
+            setTimeout(() => {
+                toast.classList.remove('show');
+            }, 2000);
+        }
+
+        // Button handlers
+        document.getElementById('stopBtn').addEventListener('click', toggleNode);
+        document.getElementById('restartBtn').addEventListener('click', restartNode);
+        document.getElementById('logsBtn').addEventListener('click', openLogs);
+
+        // Add navigation controls
+        map.addControl(new maplibregl.NavigationControl(), 'top-left');
+
+        // Disable rotation on mobile for easier use
+        map.touchZoomRotate.disableRotation();
+
+        // Initial load
+        loadNodes();
+        fetchStatus();
+
+        // Poll for updates every 5 seconds
+        setInterval(fetchStatus, 5000);
+    </script>
+</body>
+</html>
