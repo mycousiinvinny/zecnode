@@ -8,6 +8,7 @@ from flask import Flask, jsonify, request, send_from_directory
 from flask_cors import CORS
 import os
 import sys
+import threading
 
 # Add parent directory to path to import node_manager
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -118,24 +119,35 @@ def get_status():
 
 @app.route('/api/start', methods=['POST'])
 def start_node():
-    """Start the Zebra node"""
-    success, message = node_manager.start_node()
+    """Start the Zebra node — returns immediately, runs in background"""
+    # Pre-flight checks (fast, run synchronously)
+    if not os.path.ismount(node_manager.MOUNT_PATH):
+        return jsonify({
+            "success": False,
+            "message": f"SSD not mounted at {node_manager.MOUNT_PATH}. Please reconnect the SSD and try again."
+        })
+
+    thread = threading.Thread(target=node_manager.start_node, daemon=True)
+    thread.start()
     return jsonify({
-        "success": success,
-        "message": message
+        "success": True,
+        "message": "Starting node..."
     })
 
 
 @app.route('/api/stop', methods=['POST'])
 def stop_node():
     """Stop the Zebra node"""
-    # Stop lightwalletd first if running
-    if node_manager.is_lightwalletd_running():
-        node_manager.stop_lightwalletd()
-    success, message = node_manager.stop_node()
+    def _stop_all():
+        if node_manager.is_lightwalletd_running():
+            node_manager.stop_lightwalletd()
+        node_manager.stop_node()
+
+    thread = threading.Thread(target=_stop_all, daemon=True)
+    thread.start()
     return jsonify({
-        "success": success,
-        "message": message,
+        "success": True,
+        "message": "Stopping node...",
         "lightwalletd": {
             "running": False,
             "url": None
@@ -145,13 +157,17 @@ def stop_node():
 
 @app.route('/api/restart', methods=['POST'])
 def restart_node():
-    """Restart the Zebra node"""
-    if node_manager.is_lightwalletd_running():
-        node_manager.stop_lightwalletd()
-    success, message = node_manager.restart_node()
+    """Restart the Zebra node — returns immediately, runs in background"""
+    def _restart():
+        if node_manager.is_lightwalletd_running():
+            node_manager.stop_lightwalletd()
+        node_manager.restart_node()
+
+    thread = threading.Thread(target=_restart, daemon=True)
+    thread.start()
     return jsonify({
-        "success": success,
-        "message": message
+        "success": True,
+        "message": "Restarting node..."
     })
 
 

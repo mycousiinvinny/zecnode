@@ -959,47 +959,41 @@ gsettings set org.gnome.desktop.session idle-delay 0 2>/dev/null || true
         """
         if progress_callback:
             progress_callback("Starting Zcash node...")
-        
+
         # CRITICAL: Verify SSD is mounted before starting
-        # This prevents writing data to the SD card if SSD is disconnected
         if not os.path.ismount(self.MOUNT_PATH):
             return False, f"SSD not mounted at {self.MOUNT_PATH}. Please reconnect the SSD and try again."
-        
+
         # Verify the data directories exist on the SSD
         cache_path = f"{self.MOUNT_PATH}/{self.ZEBRA_CACHE_DIR}"
         state_path = f"{self.MOUNT_PATH}/{self.ZEBRA_STATE_DIR}"
-        
+
         if not os.path.exists(cache_path) or not os.path.exists(state_path):
             return False, "Zebra data directories not found on SSD. Please run the installer again."
-        
+
         try:
             # First, try to start existing container
             result = subprocess.run(
                 ["docker", "start", self.CONTAINER_NAME],
                 capture_output=True,
                 text=True,
-                timeout=30
+                timeout=120
             )
-            
+
             if result.returncode == 0:
                 return True, "Node started"
-            
+
             # Container doesn't exist, create it
-            # Remove any failed container with same name
             subprocess.run(
                 ["docker", "rm", "-f", self.CONTAINER_NAME],
                 capture_output=True
             )
-            
-            # Ensure zecnode network exists
+
             subprocess.run(
                 ["docker", "network", "create", "zecnode"],
                 capture_output=True
             )
-            
-            # Start container with volume mounts and RPC enabled
-            # Environment variables enable RPC for lightwalletd support
-            # Zebra 4.0.0+ stores data in /home/zebra/.cache/zebra
+
             result = subprocess.run([
                 "docker", "run", "-d",
                 "--name", self.CONTAINER_NAME,
@@ -1011,13 +1005,13 @@ gsettings set org.gnome.desktop.session idle-delay 0 2>/dev/null || true
                 "-e", "ZEBRA_RPC__ENABLE_COOKIE_AUTH=false",
                 "--restart", "unless-stopped",
                 self.IMAGE_NAME
-            ], capture_output=True, text=True)
-            
+            ], capture_output=True, text=True, timeout=120)
+
             if result.returncode != 0:
                 return False, f"Failed to start node: {result.stderr}"
-            
+
             return True, "Node started successfully"
-            
+
         except Exception as e:
             return False, f"Node start error: {str(e)}"
     
@@ -1027,10 +1021,10 @@ gsettings set org.gnome.desktop.session idle-delay 0 2>/dev/null || true
         """Stop the Zebra node"""
         try:
             result = subprocess.run(
-                ["docker", "stop", "-t", "3", self.CONTAINER_NAME],  # 3 second graceful shutdown
+                ["docker", "stop", "-t", "3", self.CONTAINER_NAME],
                 capture_output=True,
                 text=True,
-                timeout=10
+                timeout=30
             )
             return result.returncode == 0, "Node stopped" if result.returncode == 0 else result.stderr
         except Exception as e:
@@ -1043,7 +1037,7 @@ gsettings set org.gnome.desktop.session idle-delay 0 2>/dev/null || true
                 ["docker", "restart", self.CONTAINER_NAME],
                 capture_output=True,
                 text=True,
-                timeout=60
+                timeout=120
             )
             return result.returncode == 0, "Node restarted" if result.returncode == 0 else result.stderr
         except Exception as e:
