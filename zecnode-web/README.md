@@ -9,7 +9,7 @@ A web-based dashboard for managing your Zcash node remotely. Control your node f
 - **Remote node control** — Start, stop, and restart your Zebra node from any browser
 - **Real-time monitoring** — Sync progress, block height, peers, uptime, and disk usage
 - **Lightwalletd management** — Toggle lightwalletd on/off with one click
-- **Network map** — See your node and connected peers on a global map
+- **Network map (Coming Soon)** — See your node and connected peers on a global map
 - **Auto-start** — Runs as a system service, starts on boot
 - **Mobile friendly** — Works on phones and tablets
 
