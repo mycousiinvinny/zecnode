@@ -19,7 +19,7 @@ A web-based dashboard for managing your Zcash node remotely. Control your node f
 2. In the imager settings, enable **SSH** and set a **username/password**
 3. Configure **WiFi** or plug in ethernet
 4. Boot the Pi and SSH in: `ssh username@raspberrypi.local`
-5. Plug in your **SSD** (must be > 100GB)
+5. Plug in your **SSD** (must be > 500GB)
 
 ## Headless Install (Fresh Pi)
 
