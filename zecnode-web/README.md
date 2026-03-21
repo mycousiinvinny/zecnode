@@ -1,6 +1,6 @@
 # ZecNode Web Dashboard
 
-A web-based dashboard for managing your Zcash node remotely. Control your node from any device on your network — phone, laptop, or tablet.
+A web based dashboard for managing your Zcash node remotely. Control your node from any device on your network — phone, laptop, or tablet.
 
 ![ZecNode Web Dashboard](https://img.shields.io/badge/ZecNode-Web-f4b728)
 
