@@ -9,9 +9,13 @@ echo "  ZecNode Web Dashboard Setup"
 echo "================================"
 echo ""
 
-# Check if running on Pi
-if [ ! -d "$HOME/zecnode/zecnode-web" ]; then
-    echo "Error: ZecNode not found at ~/zecnode"
+# Find zecnode-web directory
+if [ -d "$HOME/zecnode/zecnode-web" ]; then
+    WEB_DIR="$HOME/zecnode/zecnode-web"
+elif [ -d "$HOME/zecnode-web" ]; then
+    WEB_DIR="$HOME/zecnode-web"
+else
+    echo "Error: ZecNode web files not found."
     echo "Clone the repo first: git clone https://github.com/mycousiinvinny/zecnode.git ~/zecnode"
     exit 1
 fi
@@ -23,11 +27,15 @@ sleep 1
 
 # Install dependencies
 echo "[2/3] Installing dependencies..."
-pip3 install flask flask-cors --break-system-packages 2>/dev/null || pip3 install flask flask-cors
+if ! command -v pip3 &> /dev/null; then
+    echo "  Installing pip3..."
+    sudo apt install -y python3-pip
+fi
+sudo pip3 install flask flask-cors --break-system-packages
 
 # Create systemd service
 echo "[3/3] Setting up auto-start service..."
-sudo bash -c "cat > /etc/systemd/system/zecnode-web.service" <<EOF
+sudo tee /etc/systemd/system/zecnode-web.service > /dev/null <<EOF
 [Unit]
 Description=ZecNode Web Dashboard
 After=network.target docker.service
@@ -36,9 +44,8 @@ Wants=docker.service
 [Service]
 Type=simple
 User=$USER
-WorkingDirectory=$HOME/zecnode/zecnode-web
-ExecStartPre=/bin/bash -c 'pkill -f "python3.*server.py" || true'
-ExecStart=/usr/bin/python3 -u $HOME/zecnode/zecnode-web/server.py
+WorkingDirectory=$WEB_DIR
+ExecStart=/usr/bin/python3 -u $WEB_DIR/server.py
 Restart=on-failure
 RestartSec=5
 
