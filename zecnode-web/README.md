@@ -61,15 +61,11 @@ cd ~/zecnode/zecnode-web && ./install-web.sh
 The script will:
 1. Install required Python packages (Flask)
 2. Set up a system service that starts automatically on boot
-3. Display the URL to access your dashboard
+3. Display the URL to access your dashboard (e.g. `http://192.168.x.x:5000`)
 
 ## Usage
 
-Open a browser on any device connected to the same network and go to:
-
-```
-http://<your-pi-ip>:5000
-```
+Open a browser on any device connected to the same network and go to the URL shown at the end of the install script.
 
 To find your Pi's IP address: `hostname -I`
 
