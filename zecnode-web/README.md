@@ -28,7 +28,7 @@ If you're setting up a Raspberry Pi from scratch without a monitor, the CLI inst
 SSH into your Pi and run:
 
 ```bash
-git clone https://github.com/mycousiinvinny/zecnode.git ~/zecnode && python3 ~/zecnode/zecnode-web/cli-installer.py
+sudo apt update && sudo apt install -y git && git clone https://github.com/mycousiinvinny/zecnode.git ~/zecnode && python3 ~/zecnode/zecnode-web/cli-installer.py
 ```
 
 The installer will:

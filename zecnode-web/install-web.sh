@@ -16,7 +16,8 @@ elif [ -d "$HOME/zecnode-web" ]; then
     WEB_DIR="$HOME/zecnode-web"
 else
     echo "Error: ZecNode web files not found."
-    echo "Clone the repo first: git clone https://github.com/mycousiinvinny/zecnode.git ~/zecnode"
+    echo "Install git and clone the repo first:"
+    echo "  sudo apt update && sudo apt install -y git && git clone https://github.com/mycousiinvinny/zecnode.git ~/zecnode"
     exit 1
 fi
 
