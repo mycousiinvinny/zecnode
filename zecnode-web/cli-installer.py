@@ -17,23 +17,21 @@ from config import Config
 
 
 def check_sudo():
-    """Ensure sudo works without a password prompt"""
+    """Ensure sudo is available — cache credentials for this session"""
     try:
         result = subprocess.run(
             ["sudo", "-n", "true"],
             capture_output=True, timeout=5
         )
         if result.returncode != 0:
-            print("  Sudo requires a password. Setting up passwordless sudo...")
-            print("  Enter your password once:")
-            os.system(f'sudo bash -c \'echo "{os.environ.get("USER", "pi")} ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/zecnode\'')
+            print("  Sudo access required. Enter your password:")
+            os.system("sudo -v")
             # Verify it worked
             result = subprocess.run(["sudo", "-n", "true"], capture_output=True, timeout=5)
             if result.returncode != 0:
-                print("  Error: Could not set up passwordless sudo.")
-                print("  Run manually: sudo visudo")
+                print("  Error: Could not authenticate sudo.")
                 sys.exit(1)
-            print("  Done.\n")
+            print("")
     except Exception:
         pass
 
