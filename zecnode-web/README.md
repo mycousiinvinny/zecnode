@@ -35,8 +35,11 @@ The installer will:
 1. Detect your SSD and let you select it (OS drives are excluded)
 2. Update system packages
 3. Install Docker
-4. Reboot (required for Docker)
-5. After reboot, run the installer again — it resumes automatically
+4. Reboot (required for Docker) — your SSH session will disconnect, this is normal
+5. After reboot, SSH back in and re-run the installer:
+   ```bash
+   python3 ~/zecnode/zecnode-web/cli-installer.py
+   ```
 6. Format and mount the SSD
 7. Configure Docker to use the SSD
 8. Pull and start the Zebra node
