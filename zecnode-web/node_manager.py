@@ -526,8 +526,8 @@ gsettings set org.gnome.desktop.session idle-delay 0 2>/dev/null || true
         
         Returns: (success, partition_path or error_message)
         """
-        # Refresh sudo credentials first (in case they timed out)
-        subprocess.run(["sudo", "-v"], timeout=5)
+        # Refresh sudo credentials (non-interactive — check_sudo already prompted)
+        subprocess.run(["sudo", "-n", "true"], timeout=5)
         
         # Verify drive exists before starting
         if not self._verify_drive_present(device):
