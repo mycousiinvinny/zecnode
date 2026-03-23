@@ -540,6 +540,64 @@ def register_node():
     })
 
 
+# ==================== UPDATE ====================
+
+@app.route('/api/update', methods=['POST'])
+def update_dashboard():
+    """Pull latest code from GitHub and restart the service"""
+    import subprocess
+
+    # Find the repo root (parent of zecnode-web)
+    web_dir = os.path.dirname(os.path.abspath(__file__))
+    repo_dir = os.path.dirname(web_dir)
+
+    try:
+        # Git pull
+        result = subprocess.run(
+            ["git", "pull", "origin", "main"],
+            cwd=repo_dir,
+            capture_output=True, text=True, timeout=30
+        )
+
+        if result.returncode != 0:
+            return jsonify({
+                "success": False,
+                "message": f"Git pull failed: {result.stderr.strip()}"
+            })
+
+        pull_output = result.stdout.strip()
+
+        if "Already up to date" in pull_output:
+            return jsonify({
+                "success": True,
+                "message": "Already up to date",
+                "updated": False
+            })
+
+        # Restart the service in background so the response can be sent
+        subprocess.Popen(
+            ["sudo", "systemctl", "restart", "zecnode-web"],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+        )
+
+        return jsonify({
+            "success": True,
+            "message": "Update pulled. Dashboard is restarting...",
+            "updated": True
+        })
+
+    except subprocess.TimeoutExpired:
+        return jsonify({
+            "success": False,
+            "message": "Update timed out"
+        })
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "message": str(e)
+        })
+
+
 # ==================== MAIN ====================
 
 if __name__ == '__main__':

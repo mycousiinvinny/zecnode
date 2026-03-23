@@ -535,6 +535,7 @@
                 <button class="btn btn-danger" id="stopBtn">Stop</button>
                 <button class="btn btn-secondary" id="restartBtn">Restart</button>
                 <button class="btn btn-secondary" id="logsBtn">Logs</button>
+                <button class="btn btn-secondary" id="updateBtn">Update</button>
             </div>
 
             <div class="lightwalletd-section">
@@ -817,6 +818,31 @@
             }
         }
 
+        async function updateDashboard() {
+            const btn = document.getElementById('updateBtn');
+            btn.disabled = true;
+            btn.textContent = '...';
+            showToast('Checking for updates...');
+
+            try {
+                const response = await fetch(`${API_BASE}/api/update`, { method: 'POST' });
+                const data = await response.json();
+
+                if (data.success && data.updated) {
+                    showToast('Updating... page will reload');
+                    setTimeout(() => location.reload(), 5000);
+                } else {
+                    showToast(data.message);
+                    btn.disabled = false;
+                    btn.textContent = 'Update';
+                }
+            } catch (error) {
+                showToast('Update failed');
+                btn.disabled = false;
+                btn.textContent = 'Update';
+            }
+        }
+
         // Panel collapse toggle
         document.getElementById('panelHeader').addEventListener('click', function() {
             document.getElementById('controlPanel').classList.toggle('collapsed');
@@ -854,6 +880,7 @@
         document.getElementById('stopBtn').addEventListener('click', toggleNode);
         document.getElementById('restartBtn').addEventListener('click', restartNode);
         document.getElementById('logsBtn').addEventListener('click', openLogs);
+        document.getElementById('updateBtn').addEventListener('click', updateDashboard);
 
         // Add navigation controls
         map.addControl(new maplibregl.NavigationControl(), 'top-left');
