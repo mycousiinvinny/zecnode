@@ -791,12 +791,25 @@
                 `;
                 document.body.appendChild(modal);
 
-                modal.querySelector('.logs-close').addEventListener('click', () => {
+                // Auto-refresh logs every 60 seconds
+                const logsInterval = setInterval(async () => {
+                    try {
+                        const res = await fetch(`${API_BASE}/api/logs?lines=50`);
+                        const d = await res.json();
+                        const pre = modal.querySelector('.logs-text');
+                        if (pre) pre.textContent = d.logs;
+                    } catch (e) {}
+                }, 60000);
+
+                const closeModal = () => {
+                    clearInterval(logsInterval);
                     modal.remove();
-                });
+                };
+
+                modal.querySelector('.logs-close').addEventListener('click', closeModal);
 
                 modal.addEventListener('click', (e) => {
-                    if (e.target === modal) modal.remove();
+                    if (e.target === modal) closeModal();
                 });
 
             } catch (error) {

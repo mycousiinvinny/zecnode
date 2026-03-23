@@ -266,12 +266,12 @@ def main():
 
     # Reboot required
     print("")
-    print("  ┌─────────────────────────────────────────────┐")
-    print("  │  Reboot required for Docker to work.        │")
-    print("  │                                             │")
-    print("  │  After reboot, run this installer again:    │")
-    print("  │  python3 ~/zecnode/zecnode-web/cli-installer.py │")
-    print("  └─────────────────────────────────────────────┘")
+    print("  ┌───────────────────────────────────────────────────────┐")
+    print("  │  Reboot required for Docker to work.                 │")
+    print("  │                                                      │")
+    print("  │  After reboot, run this installer again:             │")
+    print("  │  python3 ~/zecnode/zecnode-web/cli-installer.py      │")
+    print("  └───────────────────────────────────────────────────────┘")
     print("")
 
     if confirm("  Reboot now?"):
