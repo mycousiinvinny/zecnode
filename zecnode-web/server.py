@@ -15,6 +15,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from node_manager import NodeManager
 from config import Config, VERSION
+from crawler import ZcashCrawler
 
 app = Flask(__name__, static_folder='static')
 CORS(app)
@@ -30,6 +31,11 @@ import time
 
 _disk_cache = {"ssd": "--", "sd": "--", "time": 0}
 _version_cache = {"version": "--", "fetched": False}
+# Start network crawler in background
+crawler = ZcashCrawler()
+crawler_thread = threading.Thread(target=crawler.start_periodic, args=(1800,), daemon=True)
+crawler_thread.start()
+
 _sync_cache = {
     "sync_percent": config.get("cached_sync_percent", 0.0),
     "height": config.get("cached_height", 0)
@@ -538,6 +544,29 @@ def register_node():
         "message": "Node registered",
         "node": node_info
     })
+
+
+# ==================== CRAWLED NODES ====================
+
+@app.route('/api/nodes/crawled')
+def get_crawled_nodes():
+    """Get all discovered Zcash nodes from the network crawler"""
+    nodes = crawler.get_nodes()
+    return jsonify({
+        "success": True,
+        "nodes": nodes,
+        "count": len(nodes),
+        "last_crawl": crawler.last_crawl_time
+    })
+
+
+@app.route('/api/nodes/crawl', methods=['POST'])
+def trigger_crawl():
+    """Manually trigger a network crawl"""
+    if crawler.is_crawling:
+        return jsonify({"success": False, "message": "Crawl already in progress"})
+    threading.Thread(target=crawler.run_crawl, daemon=True).start()
+    return jsonify({"success": True, "message": "Crawl started"})
 
 
 # ==================== UPDATE ====================

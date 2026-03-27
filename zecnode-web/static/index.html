@@ -260,6 +260,11 @@
             min-height: 10px !important;
         }
 
+        .node-marker.lwd-node {
+            background-color: #818cf8 !important;
+            box-shadow: 0 0 8px rgba(129, 140, 248, 0.7);
+        }
+
         .node-marker:hover {
             width: 12px !important;
             height: 12px !important;
@@ -497,6 +502,9 @@
 </head>
 <body>
     <div id="map"></div>
+    <div id="nodeCount" style="position:absolute; top:10px; right:50px; background:rgba(15,15,20,0.85); color:#f4b728; padding:6px 12px; border-radius:6px; font-size:12px; z-index:1000; border:1px solid #333;">
+        -- nodes
+    </div>
 
     <div class="control-panel" id="controlPanel">
         <div class="panel-header" id="panelHeader">
@@ -590,42 +598,103 @@
 
         // Fetch and display nodes on map
         async function loadNodes() {
-            try {
-                // First load this node (self)
-                try {
-                    const selfResponse = await fetch(`${API_BASE}/api/nodes/self`);
-                    const selfData = await selfResponse.json();
+            let totalNodes = 0;
 
-                    if (selfData.success && selfData.node.lat && selfData.node.lng) {
-                        const node = selfData.node;
+            // Load this node (self) — green pulsing marker
+            try {
+                const selfResponse = await fetch(`${API_BASE}/api/nodes/self`);
+                const selfData = await selfResponse.json();
+
+                if (selfData.success && selfData.node.lat && selfData.node.lng) {
+                    const node = selfData.node;
+
+                    const el = document.createElement('div');
+                    el.className = 'node-marker self-node';
+
+                    const popup = new maplibregl.Popup({ offset: 25, closeButton: true })
+                        .setHTML(`
+                            <div class="popup-title">${node.name} (You)</div>
+                            <div class="popup-info">${node.city}, ${node.country}</div>
+                            <div class="popup-info">Status: ${node.status}</div>
+                            <div class="popup-info">Sync: ${node.sync.toFixed(1)}%</div>
+                            ${node.lwd_url ? `<div class="popup-info">LWD: ${node.lwd_url}</div>` : ''}
+                        `);
+
+                    new maplibregl.Marker({ element: el })
+                        .setLngLat([node.lng, node.lat])
+                        .setPopup(popup)
+                        .addTo(map);
+
+                    map.flyTo({ center: [node.lng, node.lat], zoom: 2 });
+                    totalNodes++;
+                }
+            } catch (e) {
+                console.log('Could not load self node:', e);
+            }
+
+            // Load crawled network nodes — gold markers
+            try {
+                const crawledResponse = await fetch(`${API_BASE}/api/nodes/crawled`);
+                const crawledData = await crawledResponse.json();
+
+                if (crawledData.success && crawledData.nodes) {
+                    crawledData.nodes.forEach(node => {
+                        if (!node.lat || !node.lng) return;
 
                         const el = document.createElement('div');
-                        el.className = 'node-marker self-node';
+                        el.className = 'node-marker';
 
-                        const popup = new maplibregl.Popup({ offset: 25, closeButton: true })
+                        const popup = new maplibregl.Popup({ offset: 15, closeButton: true })
                             .setHTML(`
-                                <div class="popup-title">${node.name} (You)</div>
-                                <div class="popup-info">${node.city}, ${node.country}</div>
-                                <div class="popup-info">Status: ${node.status}</div>
-                                <div class="popup-info">Sync: ${node.sync.toFixed(1)}%</div>
-                                ${node.lwd_url ? `<div class="popup-info">LWD: ${node.lwd_url}</div>` : ''}
+                                <div class="popup-title">Zcash Node</div>
+                                <div class="popup-info">${node.city || 'Unknown'}, ${node.country || 'Unknown'}</div>
+                                <div class="popup-info">IP: ${node.ip}</div>
                             `);
 
                         new maplibregl.Marker({ element: el })
                             .setLngLat([node.lng, node.lat])
                             .setPopup(popup)
                             .addTo(map);
-
-                        // Center map on this node
-                        map.flyTo({ center: [node.lng, node.lat], zoom: 2 });
-                    }
-                } catch (e) {
-                    console.log('Could not load self node:', e);
+                    });
+                    totalNodes += crawledData.nodes.length;
                 }
-
-            } catch (error) {
-                console.error('Failed to load nodes:', error);
+            } catch (e) {
+                console.log('Could not load crawled nodes:', e);
             }
+
+            // Load lightwalletd servers — purple markers
+            try {
+                const lwdResponse = await fetch(`${API_BASE}/api/nodes/lightwalletd`);
+                const lwdData = await lwdResponse.json();
+
+                if (lwdData.success && lwdData.servers) {
+                    lwdData.servers.forEach(server => {
+                        if (!server.lat || !server.lng) return;
+
+                        const el = document.createElement('div');
+                        el.className = 'node-marker lwd-node';
+
+                        const popup = new maplibregl.Popup({ offset: 15, closeButton: true })
+                            .setHTML(`
+                                <div class="popup-title">Lightwalletd</div>
+                                <div class="popup-info">${server.city || ''}, ${server.country || ''}</div>
+                                <div class="popup-info">${server.name}</div>
+                                ${server.block_height ? `<div class="popup-info">Height: ${server.block_height.toLocaleString()}</div>` : ''}
+                            `);
+
+                        new maplibregl.Marker({ element: el })
+                            .setLngLat([server.lng, server.lat])
+                            .setPopup(popup)
+                            .addTo(map);
+                    });
+                    totalNodes += lwdData.servers.length;
+                }
+            } catch (e) {
+                console.log('Could not load LWD servers:', e);
+            }
+
+            // Update node count
+            document.getElementById('nodeCount').textContent = `${totalNodes} nodes`;
         }
 
         // Fetch node status
