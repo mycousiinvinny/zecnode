@@ -571,57 +571,46 @@ class UpdateThread(QThread):
         import os
         try:
             if self.update_type == "zecnode":
-                # Update - download all Python files
                 home = os.path.expanduser("~")
                 zecnode_dir = os.path.join(home, "zecnode")
-                github_raw = "https://raw.githubusercontent.com/mycousiinvinny/zecnode/main"
-                
-                result = subprocess.run(
-                    ["bash", "-c", f"""
-                        cd {zecnode_dir}
-                        rm -rf __pycache__
-                        curl -sSL -o main.py "{github_raw}/main.py" && \
-                        curl -sSL -o config.py "{github_raw}/config.py" && \
-                        curl -sSL -o node_manager.py "{github_raw}/node_manager.py" && \
-                        curl -sSL -o installer.py "{github_raw}/installer.py" && \
-                        curl -sSL -o dashboard.py "{github_raw}/dashboard.py" && \
-                        echo "SUCCESS"
-                    """],
-                    capture_output=True, text=True, timeout=120
+
+                # Try git pull first (works if installed via git clone)
+                git_check = subprocess.run(
+                    ["git", "rev-parse", "--git-dir"],
+                    cwd=zecnode_dir,
+                    capture_output=True, timeout=5
                 )
-                if result.returncode == 0 and "SUCCESS" in result.stdout:
-                    self.finished.emit(True, "RESTART_ZECNODE")
+
+                if git_check.returncode == 0:
+                    result = subprocess.run(
+                        ["bash", "-c", f"cd {zecnode_dir} && rm -rf __pycache__ && git pull origin main && echo SUCCESS"],
+                        capture_output=True, text=True, timeout=120
+                    )
                 else:
-                    error = result.stderr or result.stdout or "Unknown error"
-                    self.finished.emit(False, f"Update failed: {error}")
-            
-            elif self.update_type == "zecnode_beta":
-                # Beta update - download from beta branch
-                home = os.path.expanduser("~")
-                zecnode_dir = os.path.join(home, "zecnode")
-                config_dir = os.path.join(home, ".zecnode")
-                cache_dir = os.path.join(zecnode_dir, "__pycache__")
-                github_raw = "https://raw.githubusercontent.com/mycousiinvinny/zecnode/beta"
-                
-                # Clear config and cache first
-                import shutil
-                if os.path.exists(config_dir):
-                    shutil.rmtree(config_dir)
-                if os.path.exists(cache_dir):
-                    shutil.rmtree(cache_dir)
-                
-                result = subprocess.run(
-                    ["bash", "-c", f"""
-                        cd {zecnode_dir}
-                        curl -sSL -o main.py "{github_raw}/main.py" && \
-                        curl -sSL -o config.py "{github_raw}/config.py" && \
-                        curl -sSL -o node_manager.py "{github_raw}/node_manager.py" && \
-                        curl -sSL -o installer.py "{github_raw}/installer.py" && \
-                        curl -sSL -o dashboard.py "{github_raw}/dashboard.py" && \
-                        echo "SUCCESS"
-                    """],
-                    capture_output=True, text=True, timeout=120
-                )
+                    # Fallback: download files individually via curl
+                    github_raw = "https://raw.githubusercontent.com/mycousiinvinny/zecnode/main"
+                    result = subprocess.run(
+                        ["bash", "-c", f"""
+                            cd {zecnode_dir}
+                            rm -rf __pycache__
+                            curl -sSL -o main.py "{github_raw}/main.py" && \
+                            curl -sSL -o config.py "{github_raw}/config.py" && \
+                            curl -sSL -o node_manager.py "{github_raw}/node_manager.py" && \
+                            curl -sSL -o installer.py "{github_raw}/installer.py" && \
+                            curl -sSL -o dashboard.py "{github_raw}/dashboard.py" && \
+                            mkdir -p zecnode-web/static && \
+                            curl -sSL -o zecnode-web/server.py "{github_raw}/zecnode-web/server.py" && \
+                            curl -sSL -o zecnode-web/config.py "{github_raw}/zecnode-web/config.py" && \
+                            curl -sSL -o zecnode-web/node_manager.py "{github_raw}/zecnode-web/node_manager.py" && \
+                            curl -sSL -o zecnode-web/crawler.py "{github_raw}/zecnode-web/crawler.py" && \
+                            curl -sSL -o zecnode-web/install-web.sh "{github_raw}/zecnode-web/install-web.sh" && \
+                            curl -sSL -o zecnode-web/cli-installer.py "{github_raw}/zecnode-web/cli-installer.py" && \
+                            curl -sSL -o zecnode-web/static/index.html "{github_raw}/zecnode-web/static/index.html" && \
+                            echo "SUCCESS"
+                        """],
+                        capture_output=True, text=True, timeout=120
+                    )
+
                 if result.returncode == 0 and "SUCCESS" in result.stdout:
                     self.finished.emit(True, "RESTART_ZECNODE")
                 else:
@@ -1310,10 +1299,6 @@ class DashboardWindow(QMainWindow):
         update_zecnode.triggered.connect(self._update_zecnode)
         menu.addAction(update_zecnode)
         
-        update_beta = QAction("Update to Beta", self)
-        update_beta.triggered.connect(self._update_zecnode_beta)
-        menu.addAction(update_beta)
-        
         self.tray_update_zebra = QAction("Update Zebra", self)
         self.tray_update_zebra.triggered.connect(self._update_zebra)
         menu.addAction(self.tray_update_zebra)
@@ -1686,23 +1671,6 @@ class DashboardWindow(QMainWindow):
         self.update_dialog.show()
         
         self.update_thread = UpdateThread("zecnode")
-        self.update_thread.finished.connect(self._on_update_done)
-        self.update_thread.start()
-    
-    def _update_zecnode_beta(self):
-        """Update ZecNode to beta version from GitHub"""
-        dialog = ConfirmDialog(
-            self, 
-            "Update to Beta",
-            "Download and install the beta version?\n\nWarning: Beta versions may be unstable.\n\nThe app will restart after updating."
-        )
-        if dialog.exec_() != QDialog.Accepted:
-            return
-        
-        self.update_dialog = UpdateDialog(self, "Updating to Beta...")
-        self.update_dialog.show()
-        
-        self.update_thread = UpdateThread("zecnode_beta")
         self.update_thread.finished.connect(self._on_update_done)
         self.update_thread.start()
     
