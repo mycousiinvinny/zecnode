@@ -61,6 +61,7 @@ class NodeManager:
     ESTIMATED_TARGET_HEIGHT = 3_200_000
 
     _cached_started_at = None
+    _cached_peer_count = 0
 
     def __init__(self, data_path: Optional[Path] = None, zebra_version: str = "3.1.0"):
         self.data_path = data_path or Path(self.MOUNT_PATH)
@@ -1108,6 +1109,9 @@ gsettings set org.gnome.desktop.session idle-delay 0 2>/dev/null || true
             peer_matches = re.findall(r'cached_ip_count=(\d+)', logs)
             if peer_matches:
                 status.peer_count = int(peer_matches[-1])
+                self._cached_peer_count = status.peer_count
+            elif status.running:
+                status.peer_count = self._cached_peer_count
             
             status.version = self.IMAGE_NAME
             

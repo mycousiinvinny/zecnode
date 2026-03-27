@@ -246,42 +246,19 @@
             font-size: 10px;
         }
 
-        /* Custom map markers */
-        .node-marker {
-            width: 10px !important;
-            height: 10px !important;
-            background-color: #f4b728 !important;
-            border-radius: 50% !important;
-            cursor: pointer;
-            box-shadow: 0 0 8px rgba(244, 183, 40, 0.7);
-            border: none !important;
-            display: block !important;
-            min-width: 10px !important;
-            min-height: 10px !important;
-        }
-
-        .node-marker.lwd-node {
-            background-color: #818cf8 !important;
-            box-shadow: 0 0 8px rgba(129, 140, 248, 0.7);
-        }
-
-        .node-marker:hover {
-            width: 12px !important;
-            height: 12px !important;
-            min-width: 12px !important;
-            min-height: 12px !important;
-            box-shadow: 0 0 12px rgba(244, 183, 40, 0.9);
-        }
-
-        /* Your node - larger and pulsing */
+        /* Self node marker - green pulsing */
         .node-marker.self-node {
             width: 14px !important;
             height: 14px !important;
             min-width: 14px !important;
             min-height: 14px !important;
             background-color: #4ade80 !important;
+            border-radius: 50% !important;
+            border: none !important;
+            display: block !important;
             box-shadow: 0 0 12px rgba(74, 222, 128, 0.8);
             animation: pulse 2s infinite;
+            cursor: pointer;
         }
 
         @keyframes pulse {
@@ -590,7 +567,8 @@
                     source: 'carto-dark',
                     minzoom: 0,
                     maxzoom: 19
-                }]
+                }],
+                glyphs: 'https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf'
             },
             center: [-40, 30],
             zoom: 1.5
@@ -600,7 +578,7 @@
         async function loadNodes() {
             let totalNodes = 0;
 
-            // Load this node (self) — green pulsing marker
+            // Load this node (self) — green pulsing DOM marker
             try {
                 const selfResponse = await fetch(`${API_BASE}/api/nodes/self`);
                 const selfData = await selfResponse.json();
@@ -632,65 +610,60 @@
                 console.log('Could not load self node:', e);
             }
 
-            // Load crawled network nodes — gold markers
+            // Load crawled nodes — WebGL clustered circles
             try {
                 const crawledResponse = await fetch(`${API_BASE}/api/nodes/crawled`);
                 const crawledData = await crawledResponse.json();
 
                 if (crawledData.success && crawledData.nodes) {
-                    crawledData.nodes.forEach(node => {
-                        if (!node.lat || !node.lng) return;
+                    const features = crawledData.nodes
+                        .filter(n => n.lat && n.lng)
+                        .map(n => ({
+                            type: 'Feature',
+                            geometry: { type: 'Point', coordinates: [n.lng, n.lat] },
+                            properties: { ip: n.ip, city: n.city || 'Unknown', country: n.country || 'Unknown' }
+                        }));
 
-                        const el = document.createElement('div');
-                        el.className = 'node-marker';
+                    map.addSource('crawled-nodes', {
+                        type: 'geojson',
+                        data: { type: 'FeatureCollection', features }
+                    });
 
-                        const popup = new maplibregl.Popup({ offset: 15, closeButton: true })
+                    // Small gold dots for all nodes
+                    map.addLayer({
+                        id: 'crawled-nodes-layer',
+                        type: 'circle',
+                        source: 'crawled-nodes',
+                        paint: {
+                            'circle-color': '#f4b728',
+                            'circle-radius': 2,
+                            'circle-opacity': 0.85,
+                            'circle-blur': 0.3
+                        }
+                    });
+
+                    // Click node for popup
+                    map.on('click', 'crawled-nodes-layer', (e) => {
+                        const props = e.features[0].properties;
+                        const coords = e.features[0].geometry.coordinates;
+                        new maplibregl.Popup({ closeButton: true })
+                            .setLngLat(coords)
                             .setHTML(`
                                 <div class="popup-title">Zcash Node</div>
-                                <div class="popup-info">${node.city || 'Unknown'}, ${node.country || 'Unknown'}</div>
-                                <div class="popup-info">IP: ${node.ip}</div>
-                            `);
-
-                        new maplibregl.Marker({ element: el })
-                            .setLngLat([node.lng, node.lat])
-                            .setPopup(popup)
+                                <div class="popup-info">${props.city}, ${props.country}</div>
+                                <div class="popup-info">IP: ${props.ip}</div>
+                            `)
                             .addTo(map);
                     });
+
+                    // Pointer cursor on hover
+                    map.on('mouseenter', 'crawled-nodes-layer', () => { map.getCanvas().style.cursor = 'pointer'; });
+                    map.on('mouseleave', 'crawled-nodes-layer', () => { map.getCanvas().style.cursor = ''; });
+
                     totalNodes += crawledData.nodes.length;
                 }
             } catch (e) {
                 console.log('Could not load crawled nodes:', e);
-            }
-
-            // Load lightwalletd servers — purple markers
-            try {
-                const lwdResponse = await fetch(`${API_BASE}/api/nodes/lightwalletd`);
-                const lwdData = await lwdResponse.json();
-
-                if (lwdData.success && lwdData.servers) {
-                    lwdData.servers.forEach(server => {
-                        if (!server.lat || !server.lng) return;
-
-                        const el = document.createElement('div');
-                        el.className = 'node-marker lwd-node';
-
-                        const popup = new maplibregl.Popup({ offset: 15, closeButton: true })
-                            .setHTML(`
-                                <div class="popup-title">Lightwalletd</div>
-                                <div class="popup-info">${server.city || ''}, ${server.country || ''}</div>
-                                <div class="popup-info">${server.name}</div>
-                                ${server.block_height ? `<div class="popup-info">Height: ${server.block_height.toLocaleString()}</div>` : ''}
-                            `);
-
-                        new maplibregl.Marker({ element: el })
-                            .setLngLat([server.lng, server.lat])
-                            .setPopup(popup)
-                            .addTo(map);
-                    });
-                    totalNodes += lwdData.servers.length;
-                }
-            } catch (e) {
-                console.log('Could not load LWD servers:', e);
             }
 
             // Update node count
