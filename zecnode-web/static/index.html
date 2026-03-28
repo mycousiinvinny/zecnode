@@ -479,8 +479,13 @@
 </head>
 <body>
     <div id="map"></div>
-    <div id="nodeCount" style="position:absolute; top:10px; right:50px; background:rgba(15,15,20,0.85); color:#f4b728; padding:6px 12px; border-radius:6px; font-size:12px; z-index:1000; border:1px solid #333;">
-        -- nodes
+    <div style="position:absolute; top:10px; right:50px; display:flex; gap:8px; z-index:1000;">
+        <div id="nodeCount" style="background:rgba(15,15,20,0.85); color:#f4b728; padding:6px 12px; border-radius:6px; font-size:12px; border:1px solid #333;">
+            -- nodes
+        </div>
+        <div id="heatmapToggle" style="background:rgba(15,15,20,0.85); color:#888; padding:6px 12px; border-radius:6px; font-size:12px; border:1px solid #333; cursor:pointer; -webkit-tap-highlight-color:transparent;">
+            Heatmap
+        </div>
     </div>
 
     <div class="control-panel" id="controlPanel">
@@ -639,6 +644,29 @@
                             'circle-radius': 2,
                             'circle-opacity': 0.85,
                             'circle-blur': 0.3
+                        }
+                    });
+
+                    // Heatmap layer (hidden by default)
+                    map.addLayer({
+                        id: 'crawled-nodes-heat',
+                        type: 'heatmap',
+                        source: 'crawled-nodes',
+                        layout: { 'visibility': 'none' },
+                        paint: {
+                            'heatmap-intensity': ['interpolate', ['linear'], ['zoom'], 0, 1, 9, 3],
+                            'heatmap-radius': ['interpolate', ['linear'], ['zoom'], 0, 15, 9, 30],
+                            'heatmap-weight': 1,
+                            'heatmap-opacity': 0.8,
+                            'heatmap-color': [
+                                'interpolate', ['linear'], ['heatmap-density'],
+                                0, 'rgba(0,0,0,0)',
+                                0.1, 'rgba(15,15,80,0.4)',
+                                0.3, 'rgba(90,50,180,0.6)',
+                                0.5, 'rgba(210,100,50,0.7)',
+                                0.7, 'rgba(244,183,40,0.85)',
+                                1, 'rgba(255,255,200,1)'
+                            ]
                         }
                     });
 
@@ -925,6 +953,17 @@
         document.getElementById('restartBtn').addEventListener('click', restartNode);
         document.getElementById('logsBtn').addEventListener('click', openLogs);
         document.getElementById('updateBtn').addEventListener('click', updateDashboard);
+
+        // Heatmap toggle
+        let heatmapOn = false;
+        document.getElementById('heatmapToggle').addEventListener('click', function() {
+            heatmapOn = !heatmapOn;
+            if (map.getLayer('crawled-nodes-heat')) {
+                map.setLayoutProperty('crawled-nodes-heat', 'visibility', heatmapOn ? 'visible' : 'none');
+                map.setLayoutProperty('crawled-nodes-layer', 'visibility', heatmapOn ? 'none' : 'visible');
+                this.style.color = heatmapOn ? '#f4b728' : '#888';
+            }
+        });
 
         // Add navigation controls
         map.addControl(new maplibregl.NavigationControl(), 'top-left');
