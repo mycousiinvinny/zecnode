@@ -99,9 +99,37 @@ def ipv6_to_ipv4(addr: bytes) -> Optional[str]:
     return None
 
 
+def bytes_to_ipv6(addr: bytes) -> Optional[str]:
+    """Convert 16-byte address to IPv6 string. Returns None if it's IPv4-mapped or all zeros."""
+    if addr == b'\x00' * 16:
+        return None
+    # Skip IPv4-mapped — handled by ipv6_to_ipv4
+    if addr[:12] == b'\x00' * 10 + b'\xff\xff':
+        return None
+    # Format as IPv6
+    groups = [f'{addr[i] << 8 | addr[i+1]:x}' for i in range(0, 16, 2)]
+    return ':'.join(groups)
+
+
+def is_public_ipv6(ip: str) -> bool:
+    """Check if an IPv6 address is publicly routable."""
+    if ip.startswith('fe80:') or ip.startswith('fc') or ip.startswith('fd'):
+        return False  # link-local or unique local
+    if ip == '::1' or ip.startswith('::ffff:'):
+        return False  # loopback or IPv4-mapped
+    return True
+
+
+def ip_to_bytes(ip: str) -> bytes:
+    """Convert IPv4 or IPv6 string to 16-byte address."""
+    if ':' in ip:
+        return socket.inet_pton(socket.AF_INET6, ip)
+    return ip_to_ipv6_mapped(ip)
+
+
 def build_net_addr(ip: str, port: int, services: int = 0) -> bytes:
     """Build a 26-byte network address (services + ipv6 + port)."""
-    return struct.pack('<Q', services) + ip_to_ipv6_mapped(ip) + struct.pack('>H', port)
+    return struct.pack('<Q', services) + ip_to_bytes(ip) + struct.pack('>H', port)
 
 
 def build_version_payload(remote_ip: str, remote_port: int) -> bytes:
@@ -141,9 +169,14 @@ def parse_addr_payload(payload: bytes) -> List[Tuple[str, int]]:
             port = struct.unpack_from('>H', payload, offset)[0]
             offset += 2
 
+            # Try IPv4 first, then IPv6
             ip = ipv6_to_ipv4(addr_bytes)
             if ip and is_public_ip(ip) and port == MAINNET_PORT:
                 peers.append((ip, port))
+            else:
+                ip6 = bytes_to_ipv6(addr_bytes)
+                if ip6 and is_public_ipv6(ip6) and port == MAINNET_PORT:
+                    peers.append((ip6, port))
     except Exception:
         pass
 
@@ -214,7 +247,8 @@ def crawl_node(ip: str, port: int = MAINNET_PORT, connect_timeout: float = 5.0) 
     Returns list of discovered (ip, port) tuples.
     """
     peers = []
-    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    family = socket.AF_INET6 if ':' in ip else socket.AF_INET
+    sock = socket.socket(family, socket.SOCK_STREAM)
     sock.settimeout(connect_timeout)
 
     try:
@@ -370,9 +404,10 @@ class ZcashCrawler:
             pass
 
     def resolve_seeds(self) -> List[str]:
-        """Resolve DNS seeds to get initial peer IPs."""
+        """Resolve DNS seeds to get initial peer IPs (IPv4 and IPv6)."""
         ips = []
         for seed in DNS_SEEDS:
+            # IPv4
             try:
                 results = socket.getaddrinfo(seed, MAINNET_PORT, socket.AF_INET)
                 for result in results:
@@ -380,7 +415,16 @@ class ZcashCrawler:
                     if is_public_ip(ip):
                         ips.append(ip)
             except Exception:
-                continue
+                pass
+            # IPv6
+            try:
+                results = socket.getaddrinfo(seed, MAINNET_PORT, socket.AF_INET6)
+                for result in results:
+                    ip = result[4][0]
+                    if is_public_ipv6(ip):
+                        ips.append(ip)
+            except Exception:
+                pass
         return list(set(ips))
 
     def run_crawl(self):

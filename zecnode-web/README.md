@@ -9,10 +9,25 @@ A web based dashboard for managing your Zcash node remotely. Control your node f
 - **Remote node control** — Start, stop, and restart your Zebra node from any browser
 - **Real-time monitoring** — Sync progress, block height, peers, uptime, and disk usage
 - **Lightwalletd management** — Toggle lightwalletd on/off with one click
-- **Network map** — Live map of every active Zcash node worldwide, discovered by a built-in P2P network crawler, with heatmap toggle
+- **Network map** — Live map of every active Zcash node worldwide, discovered by a built-in P2P network crawler
+- **Heatmap view** — Toggle between individual node dots and a heatmap showing node density
 - **One-click updates** — Pull the latest version from GitHub directly from the dashboard
+- **Auto-refresh logs** — Node logs update every 60 seconds while viewing
+- **IPv4 and IPv6 support** — Crawler discovers nodes on both protocols
 - **Auto-start** — Runs as a system service, starts on boot
 - **Mobile friendly** — Works on phones and tablets
+
+## Network Crawler
+
+The dashboard includes a built-in Zcash P2P network crawler that discovers active nodes worldwide. It works by:
+
+1. Connecting to DNS seed nodes
+2. Performing the Zcash protocol handshake (version/verack)
+3. Requesting peer lists via `getaddr`
+4. Recursively discovering new peers from responses
+5. Geolocating all discovered IPs and plotting them on the map
+
+The crawler runs automatically every 30 minutes and caches results so they persist across reboots. Discovered nodes expire after 7 days if not rediscovered.
 
 ## Prerequisites
 
@@ -64,6 +79,16 @@ The script will:
 2. Set up a system service that starts automatically on boot
 3. Display the URL to access your dashboard (e.g. `http://192.168.x.x:5000`)
 
+## Updating
+
+From the dashboard, click the **Update** button to pull the latest version from GitHub and restart automatically.
+
+Or manually via SSH:
+
+```bash
+cd ~/zecnode && git pull origin main && sudo systemctl restart zecnode-web
+```
+
 ## Usage
 
 Open a browser on any device connected to the same network and go to the URL shown at the end of the install script.
@@ -88,3 +113,6 @@ To find your Pi's IP address: `hostname -I`
 **Node controls not responding?**
 - Make sure only one instance of server.py is running: `ps aux | grep server.py`
 - Restart the service: `sudo systemctl restart zecnode-web`
+
+**Peers showing 0?**
+- This is normal briefly after starting — the peer count is cached and will update once Zebra logs a new count
