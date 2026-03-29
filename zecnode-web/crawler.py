@@ -208,7 +208,7 @@ def recv_message(sock: socket.socket) -> Tuple[str, bytes]:
     return command, payload
 
 
-def crawl_node(ip: str, port: int = MAINNET_PORT, connect_timeout: float = 3.0) -> List[Tuple[str, int]]:
+def crawl_node(ip: str, port: int = MAINNET_PORT, connect_timeout: float = 5.0) -> List[Tuple[str, int]]:
     """
     Connect to a Zcash node, perform handshake, and request peers.
     Returns list of discovered (ip, port) tuples.
@@ -466,8 +466,8 @@ class ZcashCrawler:
                             'last_seen': now
                         }
 
-                # Expire nodes not seen in 24 hours
-                cutoff = time.time() - 86400
+                # Expire nodes not seen in 7 days
+                cutoff = time.time() - 604800
                 expired = []
                 for ip, node in self.nodes.items():
                     try:
