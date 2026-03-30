@@ -58,8 +58,4 @@ More nodes = more decentralization = stronger network. That's it.
 - Mac version coming eventually
 - Windows version coming eventually
 
-## Beta Testing
-
-*curl -sSL https://raw.githubusercontent.com/mycousiinvinny/zecnode/beta/install.sh | bash*
-
 
