@@ -22,12 +22,13 @@ A web based dashboard for managing your Zcash node remotely. Control your node f
 The dashboard includes a built-in Zcash P2P network crawler that discovers active nodes worldwide. It works by:
 
 1. Connecting to DNS seed nodes
-2. Performing the Zcash protocol handshake (version/verack)
-3. Requesting peer lists via `getaddr`
-4. Recursively discovering new peers from responses
-5. Geolocating all discovered IPs and plotting them on the map
+2. Reading Zebra's peer cache file to find nodes that connected inbound (including firewalled nodes)
+3. Performing the Zcash protocol handshake (version/verack)
+4. Requesting peer lists via `getaddr`
+5. Recursively discovering new peers from responses
+6. Geolocating all discovered IPs (IPv4 and IPv6) and plotting them on the map
 
-The crawler runs automatically every 30 minutes and caches results so they persist across reboots. Discovered nodes expire after 7 days if not rediscovered.
+The crawler runs automatically every 30 minutes with 20 concurrent connections and caches results so they persist across reboots. Discovered nodes expire after 7 days if not rediscovered.
 
 ## Prerequisites
 

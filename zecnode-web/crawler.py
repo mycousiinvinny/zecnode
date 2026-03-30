@@ -427,6 +427,34 @@ class ZcashCrawler:
                 pass
         return list(set(ips))
 
+    def get_zebra_cached_peers(self) -> List[str]:
+        """Read peer IPs from Zebra's peer cache file."""
+        import subprocess as sp
+        peers = []
+        peers_file = "/mnt/zebra-data/zebra-cache/network/mainnet.peers"
+        try:
+            # File is owned by container user, read via sudo
+            result = sp.run(["sudo", "-n", "cat", peers_file],
+                          capture_output=True, text=True, timeout=5)
+            if result.returncode != 0:
+                return peers
+            for line in result.stdout.splitlines():
+                    line = line.strip()
+                    if not line:
+                        continue
+                    # Split IP from port on last colon
+                    last_colon = line.rfind(':')
+                    if last_colon == -1:
+                        continue
+                    ip = line[:last_colon]
+                    if '.' in ip and is_public_ip(ip):
+                        peers.append(ip)
+                    elif ':' in ip and is_public_ipv6(ip):
+                        peers.append(ip)
+        except Exception:
+            pass
+        return list(set(peers))
+
     def run_crawl(self):
         """Execute one full crawl cycle."""
         if self.is_crawling:
@@ -434,8 +462,11 @@ class ZcashCrawler:
         self.is_crawling = True
 
         try:
-            # Resolve DNS seeds
+            # Resolve DNS seeds + Zebra's cached peers
             seed_ips = self.resolve_seeds()
+            zebra_peers = self.get_zebra_cached_peers()
+            seed_ips = list(set(seed_ips + zebra_peers))
+
             if not seed_ips:
                 return
 
@@ -445,11 +476,11 @@ class ZcashCrawler:
             max_nodes = 2000
 
             # Crawl nodes using thread pool
-            with ThreadPoolExecutor(max_workers=10) as executor:
+            with ThreadPoolExecutor(max_workers=20) as executor:
                 while queue and len(visited) < max_nodes:
                     # Submit batch of work
                     batch = []
-                    while queue and len(batch) < 10:
+                    while queue and len(batch) < 20:
                         ip = queue.popleft()
                         if ip not in visited:
                             visited.add(ip)
@@ -476,6 +507,11 @@ class ZcashCrawler:
                                     queue.append(peer_ip)
                         except Exception:
                             pass
+
+            # Add Zebra's cached peers to discovered (catches inbound/firewalled nodes)
+            for ip in zebra_peers:
+                if ip not in discovered:
+                    discovered[ip] = MAINNET_PORT
 
             if not discovered:
                 return
