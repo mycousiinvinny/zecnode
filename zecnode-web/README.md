@@ -28,7 +28,7 @@ The dashboard includes a built-in Zcash P2P network crawler that discovers activ
 5. Recursively discovering new peers from responses
 6. Geolocating all discovered IPs (IPv4 and IPv6) and plotting them on the map
 
-The crawler runs automatically every 30 minutes with 20 concurrent connections and caches results so they persist across reboots. Discovered nodes expire after 7 days if not rediscovered.
+The crawler connects to nodes on any port (not just 8233), verifying each one via the Zcash protocol handshake. It runs automatically every 30 minutes with 20 concurrent connections and can discover 2,000+ active nodes. Results are cached to disk and persist across reboots. Nodes expire after 7 days if not rediscovered.
 
 ## Prerequisites
 

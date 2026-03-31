@@ -171,11 +171,11 @@ def parse_addr_payload(payload: bytes) -> List[Tuple[str, int]]:
 
             # Try IPv4 first, then IPv6
             ip = ipv6_to_ipv4(addr_bytes)
-            if ip and is_public_ip(ip) and port == MAINNET_PORT:
+            if ip and is_public_ip(ip):
                 peers.append((ip, port))
             else:
                 ip6 = bytes_to_ipv6(addr_bytes)
-                if ip6 and is_public_ipv6(ip6) and port == MAINNET_PORT:
+                if ip6 and is_public_ipv6(ip6):
                     peers.append((ip6, port))
     except Exception:
         pass
@@ -241,18 +241,20 @@ def recv_message(sock: socket.socket) -> Tuple[str, bytes]:
     return command, payload
 
 
-def crawl_node(ip: str, port: int = MAINNET_PORT, connect_timeout: float = 5.0) -> List[Tuple[str, int]]:
+def crawl_node(ip: str, port: int = MAINNET_PORT, connect_timeout: float = 5.0) -> Optional[List[Tuple[str, int]]]:
     """
     Connect to a Zcash node, perform handshake, and request peers.
-    Returns list of discovered (ip, port) tuples.
+    Returns list of discovered (ip, port) tuples, or None if connection failed.
     """
     peers = []
+    connected = False
     family = socket.AF_INET6 if ':' in ip else socket.AF_INET
     sock = socket.socket(family, socket.SOCK_STREAM)
     sock.settimeout(connect_timeout)
 
     try:
         sock.connect((ip, port))
+        connected = True
         # Switch to longer timeout for message exchange
         sock.settimeout(10.0)
 
@@ -311,7 +313,7 @@ def crawl_node(ip: str, port: int = MAINNET_PORT, connect_timeout: float = 5.0) 
         except Exception:
             pass
 
-    return peers
+    return peers if connected else None
 
 
 # ==================== GEOLOCATION ====================
@@ -470,10 +472,11 @@ class ZcashCrawler:
             if not seed_ips:
                 return
 
-            queue = deque(seed_ips)
+            queue = deque([(ip, MAINNET_PORT) for ip in seed_ips])
             visited = set()
-            discovered = {}  # ip -> port
-            max_nodes = 2000
+            verified = {}       # ip -> port for nodes we successfully connected to
+            unverified = set()  # IPs seen in addr responses but not connected
+            max_nodes = 5000
 
             # Crawl nodes using thread pool
             with ThreadPoolExecutor(max_workers=20) as executor:
@@ -481,47 +484,55 @@ class ZcashCrawler:
                     # Submit batch of work
                     batch = []
                     while queue and len(batch) < 20:
-                        ip = queue.popleft()
+                        ip, port = queue.popleft()
                         if ip not in visited:
                             visited.add(ip)
-                            batch.append(ip)
+                            batch.append((ip, port))
 
                     if not batch:
                         break
 
                     futures = {
-                        executor.submit(crawl_node, ip): ip
-                        for ip in batch
+                        executor.submit(crawl_node, ip, port): (ip, port)
+                        for ip, port in batch
                     }
 
                     for future in as_completed(futures, timeout=30):
-                        ip = futures[future]
+                        ip, port = futures[future]
                         try:
                             peers = future.result()
-                            # Mark this IP as a live node
-                            discovered[ip] = MAINNET_PORT
-
-                            # Add new peers to queue
-                            for peer_ip, peer_port in peers:
-                                if peer_ip not in visited and len(visited) + len(queue) < max_nodes:
-                                    queue.append(peer_ip)
+                            if peers is not None:
+                                # Successfully connected
+                                verified[ip] = port
+                                for peer_ip, peer_port in peers:
+                                    unverified.add(peer_ip)
+                                    if peer_ip not in visited and len(visited) + len(queue) < max_nodes:
+                                        queue.append((peer_ip, peer_port))
                         except Exception:
                             pass
 
-            # Add Zebra's cached peers to discovered (catches inbound/firewalled nodes)
-            for ip in zebra_peers:
-                if ip not in discovered:
-                    discovered[ip] = MAINNET_PORT
+            # Nodes we connected to but got no peers are still verified
+            for ip in visited:
+                if ip in verified:
+                    continue
+                # Check if we at least connected (it's in visited and was a seed or was queued)
+                # Only mark as verified if it was successfully crawled
+                # Already handled above
 
-            if not discovered:
+            # Add Zebra's cached peers to queue for crawling
+            for ip in zebra_peers:
+                if ip not in verified:
+                    unverified.add(ip)
+
+            # Only map verified nodes (ones we actually connected to)
+            if not verified:
                 return
 
             # Geolocate new IPs (skip ones we already have)
             with self.lock:
                 existing_ips = set(self.nodes.keys())
 
-            new_ips = [ip for ip in discovered if ip not in existing_ips]
-            all_ips = list(discovered.keys())
+            new_ips = [ip for ip in verified if ip not in existing_ips]
 
             # Geolocate new IPs
             geo_data = {}
@@ -531,14 +542,13 @@ class ZcashCrawler:
             # Update nodes
             now = datetime.now(timezone.utc).isoformat()
             with self.lock:
-                # Update last_seen for all discovered nodes
-                for ip in all_ips:
+                for ip, port in verified.items():
                     if ip in self.nodes:
                         self.nodes[ip]['last_seen'] = now
                     elif ip in geo_data:
                         self.nodes[ip] = {
                             'ip': ip,
-                            'port': MAINNET_PORT,
+                            'port': port,
                             'lat': geo_data[ip]['lat'],
                             'lng': geo_data[ip]['lng'],
                             'city': geo_data[ip]['city'],

@@ -626,7 +626,7 @@
                         .map(n => ({
                             type: 'Feature',
                             geometry: { type: 'Point', coordinates: [n.lng, n.lat] },
-                            properties: { ip: n.ip, city: n.city || 'Unknown', country: n.country || 'Unknown' }
+                            properties: { ip: n.ip, city: n.city || 'Unknown', country: n.country || 'Unknown', verified: n.verified ? 1 : 0 }
                         }));
 
                     map.addSource('crawled-nodes', {
@@ -634,7 +634,7 @@
                         data: { type: 'FeatureCollection', features }
                     });
 
-                    // Small gold dots for all nodes
+                    // Gold dots for verified, white for unverified
                     map.addLayer({
                         id: 'crawled-nodes-layer',
                         type: 'circle',
