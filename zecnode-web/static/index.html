@@ -670,8 +670,19 @@
                         }
                     });
 
-                    // Click node for popup
-                    map.on('click', 'crawled-nodes-layer', (e) => {
+                    // Invisible larger hit area for easier clicking
+                    map.addLayer({
+                        id: 'crawled-nodes-hit',
+                        type: 'circle',
+                        source: 'crawled-nodes',
+                        paint: {
+                            'circle-color': 'transparent',
+                            'circle-radius': 8
+                        }
+                    });
+
+                    // Click node for popup (on hit area layer)
+                    map.on('click', 'crawled-nodes-hit', (e) => {
                         const props = e.features[0].properties;
                         const coords = e.features[0].geometry.coordinates;
                         new maplibregl.Popup({ closeButton: true })
@@ -685,8 +696,8 @@
                     });
 
                     // Pointer cursor on hover
-                    map.on('mouseenter', 'crawled-nodes-layer', () => { map.getCanvas().style.cursor = 'pointer'; });
-                    map.on('mouseleave', 'crawled-nodes-layer', () => { map.getCanvas().style.cursor = ''; });
+                    map.on('mouseenter', 'crawled-nodes-hit', () => { map.getCanvas().style.cursor = 'pointer'; });
+                    map.on('mouseleave', 'crawled-nodes-hit', () => { map.getCanvas().style.cursor = ''; });
 
                     totalNodes += crawledData.nodes.length;
                 }
@@ -961,6 +972,7 @@
             if (map.getLayer('crawled-nodes-heat')) {
                 map.setLayoutProperty('crawled-nodes-heat', 'visibility', heatmapOn ? 'visible' : 'none');
                 map.setLayoutProperty('crawled-nodes-layer', 'visibility', heatmapOn ? 'none' : 'visible');
+                map.setLayoutProperty('crawled-nodes-hit', 'visibility', heatmapOn ? 'none' : 'visible');
                 this.style.color = heatmapOn ? '#f4b728' : '#888';
             }
         });
