@@ -63,7 +63,7 @@ class NodeManager:
     _cached_started_at = None
     _cached_peer_count = 0
 
-    def __init__(self, data_path: Optional[Path] = None, zebra_version: str = "3.1.0"):
+    def __init__(self, data_path: Optional[Path] = None, zebra_version: str = "latest"):
         self.data_path = data_path or Path(self.MOUNT_PATH)
         self.zebra_version = zebra_version
         self.IMAGE_NAME = f"zfnd/zebra:{zebra_version}"

@@ -39,7 +39,7 @@ else
   "docker_configured": true,
   "node_started": false,
   "autostart": false,
-  "zebra_version": "4.0.0",
+  "zebra_version": "latest",
   "lightwalletd_enabled": false
 }
 CONFIGEOF

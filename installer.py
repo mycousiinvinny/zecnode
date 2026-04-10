@@ -226,7 +226,7 @@ class InstallerWizard(QMainWindow):
     def __init__(self, config: Config):
         super().__init__()
         self.config = config
-        zebra_version = config.get("zebra_version", "3.1.0")
+        zebra_version = config.get("zebra_version", "latest")
         self.node_manager = NodeManager(zebra_version=zebra_version)
         self.selected_drive: Optional[DriveInfo] = None
         self.worker = None

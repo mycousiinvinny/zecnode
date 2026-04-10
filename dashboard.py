@@ -560,7 +560,7 @@ class UpdateThread(QThread):
     """Background thread for updates"""
     finished = pyqtSignal(bool, str)  # success, message
     
-    def __init__(self, update_type, data_path=None, zebra_version="3.1.0"):
+    def __init__(self, update_type, data_path=None, zebra_version="latest"):
         super().__init__()
         self.update_type = update_type
         self.data_path = data_path
@@ -798,7 +798,7 @@ class DashboardWindow(QMainWindow):
     def __init__(self, config: Config):
         super().__init__()
         self.config = config
-        zebra_version = config.get("zebra_version", "3.1.0")
+        zebra_version = config.get("zebra_version", "latest")
         self.node_manager = NodeManager(config.get_data_path(), zebra_version=zebra_version)
         self._centered = False
         self._drag_pos = None
