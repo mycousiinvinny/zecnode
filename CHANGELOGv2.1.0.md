@@ -1,3 +1,21 @@
+# v2.1.1 - April 12th 2026 - UI & Bug Fixes
+
+- Fixed lightwalletd permission error (Error 13) when starting on root-owned SSD mount
+
+- Fixed ZecNode update failing when local files were modified (uses git reset instead of pull)
+
+- Fixed crash on launch (_threads not initialized before tray setup)
+
+- Updated all Zebra version fallbacks from hardcoded versions to "latest"
+
+- Lightwalletd toggle replaced with animated sliding switch
+
+- Removed URL row from lightwalletd card — IP now accessible from tray menu
+
+- Added "IP: (click to copy)" to system tray menu
+
+- Cleaned up lightwalletd card layout — status text inline with title
+
 # v2.1.0 - March 18th 2026 - Performance & Stability
 
  - Fixed freeze on quit — replaced SIGKILL with clean Qt shutdown
