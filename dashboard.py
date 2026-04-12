@@ -666,7 +666,7 @@ class UpdateThread(QThread):
 
                 if git_check.returncode == 0:
                     result = subprocess.run(
-                        ["bash", "-c", f"cd {zecnode_dir} && rm -rf __pycache__ && git pull origin main && echo SUCCESS"],
+                        ["bash", "-c", f"cd {zecnode_dir} && rm -rf __pycache__ && git fetch origin main && git reset --hard origin/main && echo SUCCESS"],
                         capture_output=True, text=True, timeout=120
                     )
                 else:
