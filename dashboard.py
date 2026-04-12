@@ -15,11 +15,94 @@ from PyQt5.QtWidgets import (
     QMenu, QAction, QMessageBox, QDialog, QApplication,
     QSpacerItem, QSizePolicy, QFrame, QProgressBar
 )
-from PyQt5.QtCore import Qt, QTimer, QThread, pyqtSignal
-from PyQt5.QtGui import QFont, QIcon, QPixmap, QColor, QPainter, QTextCursor
+from PyQt5.QtCore import Qt, QTimer, QThread, pyqtSignal, QPropertyAnimation, QRectF, pyqtProperty, QEasingCurve
+from PyQt5.QtGui import QFont, QIcon, QPixmap, QColor, QPainter, QTextCursor, QBrush, QPen
 
 from config import Config, VERSION
 from node_manager import NodeManager
+
+
+class ToggleSwitch(QWidget):
+    """Animated sliding toggle switch"""
+    toggled = pyqtSignal(bool)
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._checked = False
+        self._enabled = True
+        self._knob_x = 4.0
+        self._opacity = 1.0
+        self.setFixedSize(52, 28)
+        self.setCursor(Qt.PointingHandCursor)
+
+        self._anim = QPropertyAnimation(self, b"knob_x")
+        self._anim.setDuration(200)
+        self._anim.setEasingCurve(QEasingCurve.InOutCubic)
+
+    def _get_knob_x(self):
+        return self._knob_x
+
+    def _set_knob_x(self, val):
+        self._knob_x = val
+        self.update()
+
+    knob_x = pyqtProperty(float, _get_knob_x, _set_knob_x)
+
+    def isChecked(self):
+        return self._checked
+
+    def setChecked(self, checked):
+        if self._checked == checked:
+            return
+        self._checked = checked
+        end = self.width() - self.height() + 4 if checked else 4.0
+        self._anim.stop()
+        self._anim.setStartValue(self._knob_x)
+        self._anim.setEndValue(end)
+        self._anim.start()
+
+    def setEnabled(self, enabled):
+        self._enabled = enabled
+        self._opacity = 1.0 if enabled else 0.4
+        self.setCursor(Qt.PointingHandCursor if enabled else Qt.ArrowCursor)
+        self.update()
+
+    def isEnabled(self):
+        return self._enabled
+
+    def mousePressEvent(self, event):
+        if self._enabled:
+            self._checked = not self._checked
+            end = self.width() - self.height() + 4 if self._checked else 4.0
+            self._anim.stop()
+            self._anim.setStartValue(self._knob_x)
+            self._anim.setEndValue(end)
+            self._anim.start()
+            self.toggled.emit(self._checked)
+
+    def paintEvent(self, event):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.Antialiasing)
+        p.setOpacity(self._opacity)
+
+        w, h = self.width(), self.height()
+        radius = h / 2
+
+        # Track
+        if self._checked:
+            track_color = QColor("#4ade80")
+        else:
+            track_color = QColor("#444")
+        p.setPen(Qt.NoPen)
+        p.setBrush(QBrush(track_color))
+        p.drawRoundedRect(QRectF(0, 0, w, h), radius, radius)
+
+        # Knob
+        knob_size = h - 8
+        p.setBrush(QBrush(QColor("white")))
+        p.drawEllipse(QRectF(self._knob_x, 4, knob_size, knob_size))
+
+        p.end()
 
 
 def check_internet(timeout=2) -> bool:
@@ -810,6 +893,7 @@ class DashboardWindow(QMainWindow):
         self.setMinimumSize(600, 550)
         self.resize(600, 550)
         
+        self._threads = []
         self._setup_ui()
         self._setup_tray()
         
@@ -831,9 +915,6 @@ class DashboardWindow(QMainWindow):
         self.price_timer.timeout.connect(self._fetch_price)
         self.price_timer.start(120000)
         self._fetch_price()
-        
-        # Track all threads for cleanup
-        self._threads = []
     
     def mousePressEvent(self, event):
         """Enable dragging the window"""
@@ -1066,15 +1147,21 @@ class DashboardWindow(QMainWindow):
         """)
         lwd_layout = QVBoxLayout(lwd_container)
         lwd_layout.setContentsMargins(15, 12, 15, 12)
-        lwd_layout.setSpacing(8)
-        
-        # Top row: Title and Toggle
+        lwd_layout.setSpacing(6)
+
+        # Top row: Title + status + info + toggle
         lwd_top = QHBoxLayout()
+        lwd_top.setSpacing(6)
         lwd_title = QLabel("Lightwalletd")
         lwd_title.setFont(QFont("Segoe UI", 13, QFont.Bold))
         lwd_title.setStyleSheet("color: #e8e8e8; border: none; background: transparent;")
         lwd_top.addWidget(lwd_title)
-        
+
+        # Status label (inline next to title)
+        self.lwd_status = QLabel("")
+        self.lwd_status.setStyleSheet("color: #888; font-size: 11px; border: none; background: transparent;")
+        lwd_top.addWidget(self.lwd_status)
+
         # Info icon with tooltip
         lwd_info = QLabel("ⓘ")
         lwd_info.setStyleSheet("""
@@ -1083,7 +1170,6 @@ class DashboardWindow(QMainWindow):
                 font-size: 11px;
                 border: none;
                 background-color: transparent;
-                padding-left: 4px;
             }
             QLabel:hover {
                 color: #f4b728;
@@ -1106,76 +1192,15 @@ class DashboardWindow(QMainWindow):
             "Requires Zebra to be fully synced."
         )
         lwd_top.addWidget(lwd_info)
-        
+
         lwd_top.addStretch()
-        
+
         # Toggle switch
-        self.lwd_toggle = QPushButton("OFF")
-        self.lwd_toggle.setCheckable(True)
-        self.lwd_toggle.setFixedSize(90, 34)
-        self.lwd_toggle.setStyleSheet("""
-            QPushButton {
-                background-color: #444;
-                border: 2px solid #555;
-                border-radius: 17px;
-                color: white;
-                font-size: 12px;
-                font-weight: bold;
-                padding: 4px 10px;
-            }
-            QPushButton:checked {
-                background-color: #4ade80;
-                border-color: #4ade80;
-                color: black;
-            }
-        """)
-        self.lwd_toggle.clicked.connect(self._toggle_lightwalletd)
+        self.lwd_toggle = ToggleSwitch()
+        self.lwd_toggle.toggled.connect(self._toggle_lightwalletd_from_toggle)
         lwd_top.addWidget(self.lwd_toggle)
         lwd_layout.addLayout(lwd_top)
-        
-        # Status row
-        lwd_status_row = QHBoxLayout()
-        status_label = QLabel("Status:")
-        status_label.setStyleSheet("color: #888; font-size: 12px; border: none; background: transparent;")
-        lwd_status_row.addWidget(status_label)
-        
-        self.lwd_status = QLabel("Off")
-        self.lwd_status.setStyleSheet("color: #888; font-size: 12px; border: none; background: transparent;")
-        lwd_status_row.addWidget(self.lwd_status)
-        lwd_status_row.addStretch()
-        lwd_layout.addLayout(lwd_status_row)
-        
-        # URL row (hidden when off)
-        self.lwd_url_row = QWidget()
-        self.lwd_url_row.setStyleSheet("background: transparent;")
-        lwd_url_layout = QHBoxLayout(self.lwd_url_row)
-        lwd_url_layout.setContentsMargins(0, 0, 0, 0)
-        lwd_url_layout.setSpacing(10)
-        
-        self.lwd_url = QLabel("http://192.168.1.100:9067")
-        self.lwd_url.setStyleSheet("color: #4ade80; font-size: 12px; font-family: monospace; border: none; background: transparent;")
-        lwd_url_layout.addWidget(self.lwd_url)
-        lwd_url_layout.addStretch()
-        
-        self.lwd_copy_btn = QPushButton("Copy")
-        self.lwd_copy_btn.setFixedSize(90, 34)
-        self.lwd_copy_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #2a2a3a;
-                border: 1px solid #444;
-                border-radius: 17px;
-                color: white;
-                font-size: 12px;
-                padding: 4px 10px;
-            }
-            QPushButton:hover { background-color: #3a3a4a; }
-        """)
-        self.lwd_copy_btn.clicked.connect(self._copy_lwd_url)
-        lwd_url_layout.addWidget(self.lwd_copy_btn)
-        
-        self.lwd_url_row.setVisible(False)
-        lwd_layout.addWidget(self.lwd_url_row)
-        
+
         layout.addWidget(lwd_container)
         
         layout.addStretch()
@@ -1309,10 +1334,17 @@ class DashboardWindow(QMainWindow):
         reset_action.triggered.connect(self._reset_zecnode)
         menu.addAction(reset_action)
         
+        self.tray_ip = QAction("IP: fetching...", self)
+        self.tray_ip.triggered.connect(self._copy_ip_from_tray)
+        menu.addAction(self.tray_ip)
+        self._update_tray_ip()
+
+        menu.addSeparator()
+
         self.tray_toggle_dashboard = QAction("Hide Dashboard", self)
         self.tray_toggle_dashboard.triggered.connect(self._toggle_dashboard_from_menu)
         menu.addAction(self.tray_toggle_dashboard)
-        
+
         quit_action = QAction("Quit", self)
         quit_action.triggered.connect(self._quit)
         menu.addAction(quit_action)
@@ -1331,6 +1363,25 @@ class DashboardWindow(QMainWindow):
             self.raise_()
             self.tray_toggle_dashboard.setText("Hide Dashboard")
     
+    def _update_tray_ip(self):
+        """Fetch local IP and update tray menu item"""
+        def get_ip():
+            return self.node_manager.get_local_ip()
+
+        def on_ip(ip):
+            self._local_ip = ip
+            self.tray_ip.setText(f"IP: {ip}  (click to copy)")
+
+        self._run_in_thread(get_ip, on_ip)
+
+    def _copy_ip_from_tray(self):
+        """Copy local IP to clipboard"""
+        ip = getattr(self, '_local_ip', None)
+        if ip:
+            QApplication.clipboard().setText(ip)
+            self.tray_ip.setText(f"IP: {ip}  ✓ Copied!")
+            QTimer.singleShot(2000, lambda: self.tray_ip.setText(f"IP: {ip}  (click to copy)"))
+
     def _show_dashboard(self):
         """Show and bring dashboard to front"""
         self.setVisible(True)
@@ -1522,33 +1573,23 @@ class DashboardWindow(QMainWindow):
         # Update UI
         if lwd_running:
             self.lwd_toggle.setChecked(True)
-            self.lwd_toggle.setText("ON")
             self.lwd_status.setText("Running")
-            self.lwd_status.setStyleSheet("color: #4ade80; font-size: 12px; border: none; background: transparent;")
-            self.lwd_url.setText(self.node_manager.get_lightwalletd_url())
-            self.lwd_url_row.setVisible(True)
+            self.lwd_status.setStyleSheet("color: #4ade80; font-size: 11px; border: none; background: transparent;")
             self.lwd_toggle.setEnabled(True)
         elif not zebra_status.running:
             self.lwd_toggle.setChecked(False)
-            self.lwd_toggle.setText("OFF")
             self.lwd_status.setText("Node stopped")
-            self.lwd_status.setStyleSheet("color: #ef4444; font-size: 12px; border: none; background: transparent;")
-            self.lwd_url_row.setVisible(False)
+            self.lwd_status.setStyleSheet("color: #ef4444; font-size: 11px; border: none; background: transparent;")
             self.lwd_toggle.setEnabled(False)
         elif zebra_status.sync_percent < 99.9:
             self.lwd_toggle.setChecked(False)
-            self.lwd_toggle.setText("OFF")
             self.lwd_status.setText(f"Syncing ({zebra_status.sync_percent:.1f}%)")
-            self.lwd_status.setStyleSheet("color: #888; font-size: 12px; border: none; background: transparent;")
-            self.lwd_url_row.setVisible(False)
+            self.lwd_status.setStyleSheet("color: #888; font-size: 11px; border: none; background: transparent;")
             self.lwd_toggle.setEnabled(False)
         else:
             # Zebra synced but lwd not running
             self.lwd_toggle.setChecked(False)
-            self.lwd_toggle.setText("OFF")
-            self.lwd_status.setText("Ready")
-            self.lwd_status.setStyleSheet("color: #4ade80; font-size: 12px; border: none; background: transparent;")
-            self.lwd_url_row.setVisible(False)
+            self.lwd_status.setText("")
             self.lwd_toggle.setEnabled(True)
     
     def _stop(self):
@@ -1719,59 +1760,56 @@ class DashboardWindow(QMainWindow):
         
         self._start_refresh()
     
-    def _toggle_lightwalletd(self):
+    def _toggle_lightwalletd_from_toggle(self, checked):
+        """Called by ToggleSwitch signal - checked is the new state"""
+        self._toggle_lightwalletd(checked)
+
+    def _toggle_lightwalletd(self, checked=None):
         """Toggle lightwalletd on/off"""
-        if self.lwd_toggle.isChecked():
-            # Start lightwalletd in background thread (status check happens inside start_lightwalletd)
+        if checked is None:
+            checked = self.lwd_toggle.isChecked()
+        if checked:
+            # Start lightwalletd in background thread
             self._lwd_action_in_progress = True
-            self.lwd_toggle.setText("...")
             self.lwd_toggle.setEnabled(False)
             self.lwd_status.setText("Starting...")
-            self.lwd_status.setStyleSheet("color: #f4b728; font-size: 12px; border: none; background: transparent;")
+            self.lwd_status.setStyleSheet("color: #f4b728; font-size: 11px; border: none; background: transparent;")
 
             def start_lwd():
                 success, msg = self.node_manager.start_lightwalletd()
                 return success, msg
-            
+
             def on_start_done(result):
                 self._lwd_action_in_progress = False
                 success, msg = result
                 if success:
-                    self.lwd_toggle.setText("ON")
                     self.lwd_status.setText("Running")
-                    self.lwd_status.setStyleSheet("color: #4ade80; font-size: 12px; border: none; background: transparent;")
-                    self.lwd_url.setText(self.node_manager.get_lightwalletd_url())
-                    self.lwd_url_row.setVisible(True)
+                    self.lwd_status.setStyleSheet("color: #4ade80; font-size: 11px; border: none; background: transparent;")
                     self.config.set("lightwalletd_enabled", True)
                 else:
                     self.lwd_toggle.setChecked(False)
-                    self.lwd_toggle.setText("OFF")
                     self.lwd_status.setText(f"Error: {msg}")
-                    self.lwd_status.setStyleSheet("color: #ef4444; font-size: 12px; border: none; background: transparent;")
+                    self.lwd_status.setStyleSheet("color: #ef4444; font-size: 11px; border: none; background: transparent;")
                 self.lwd_toggle.setEnabled(True)
-            
+
             self._run_in_thread(start_lwd, on_start_done)
         else:
             # Stop lightwalletd in background thread
             self._lwd_action_in_progress = True
-            self.lwd_toggle.setText("...")
             self.lwd_toggle.setEnabled(False)
             self.lwd_status.setText("Stopping...")
-            self.lwd_status.setStyleSheet("color: #f4b728; font-size: 12px; border: none; background: transparent;")
-            
+            self.lwd_status.setStyleSheet("color: #f4b728; font-size: 11px; border: none; background: transparent;")
+
             def stop_lwd():
                 self.node_manager.stop_lightwalletd()
                 return True
-            
+
             def on_stop_done(result):
                 self._lwd_action_in_progress = False
-                self.lwd_toggle.setText("OFF")
                 self.lwd_toggle.setEnabled(True)
-                self.lwd_status.setText("Off")
-                self.lwd_status.setStyleSheet("color: #888; font-size: 12px; border: none; background: transparent;")
-                self.lwd_url_row.setVisible(False)
+                self.lwd_status.setText("")
                 self.config.set("lightwalletd_enabled", False)
-            
+
             self._run_in_thread(stop_lwd, on_stop_done)
     
     def _run_in_thread(self, func, callback):
@@ -1790,14 +1828,6 @@ class DashboardWindow(QMainWindow):
         thread.finished.connect(lambda: self._remove_thread(thread))
         thread.start()
         self._threads.append(thread)
-    
-    def _copy_lwd_url(self):
-        """Copy lightwalletd URL to clipboard"""
-        clipboard = QApplication.clipboard()
-        clipboard.setText(self.lwd_url.text())
-        # Brief visual feedback
-        self.lwd_copy_btn.setText("Copied!")
-        QTimer.singleShot(1500, lambda: self.lwd_copy_btn.setText("Copy"))
     
     def _show_logs(self):
         dialog = LogsDialog(self, self.node_manager)
