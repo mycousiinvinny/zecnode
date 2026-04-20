@@ -53,6 +53,14 @@ Running a node on your main computer kind of sucks. It eats up resources, needs 
 
 More nodes = more decentralization = stronger network. That's it.
 
+## Uninstall
+
+If you ever need to uninstall, run:
+
+*curl -sSL https://raw.githubusercontent.com/mycousiinvinny/zecnode/main/uninstall.sh | bash*
+
+Your blockchain data at `/mnt/zebra-data` is preserved, so reinstalling is near-instant.
+
 ## Roadmap
 
 - Mac version coming eventually
