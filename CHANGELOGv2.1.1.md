@@ -1,3 +1,41 @@
+# v3.0.0 - April 19th 2026 - Major UI Redesign & Network Tab
+
+## New Features
+
+- **Welcome splash screen** with ZecNode logo and tagline on startup
+- **Network tab** — Block Height, Network Hashrate, Total Supply, Shielded % stats + a stacked-area Shielded Supply chart (Sprout / Sapling / Orchard) powered by the zcashinfo.com API
+- **Sync ETA** under the sync bar — shows estimated time until fully synced during initial sync
+- **Update notification badge** — small gold dot on the Settings sidebar button when a newer ZecNode release is available on GitHub
+- **"What's new in vX.Y.Z" modal** — clickable link in Settings shows GitHub release notes
+- **Update Lightwalletd button** in Settings — one-click `docker pull` + restart for the LWD image
+- **Zebra on/off toggle** — replaces the old Stop/Start buttons (now matches the Lightwalletd toggle style)
+- **Restart button** is now a clean circular-arrow icon (⟳) instead of a text button
+
+## Major UI Redesign
+
+- **Sync Hero** at the top of the Dashboard — big bold percentage, block height, thick progress bar with a subtle gold glow
+- **"✓ Synced" morph** at 100% — the percentage number transforms into a gold "Synced" with a glowing effect
+- **Status dots replace status text everywhere** — the title bar, Zebra row, and Lightwalletd row now use colored dots (green / red / yellow) instead of "Running" / "Stopped" / "No Internet" text
+- **Stats footer strip** — borderless `peers · uptime · SSD · SD card` at the bottom of the Dashboard (replaces the 4 boxed stat cards)
+- **Lightwalletd row** now has its own colored status dot matching Zebra's
+- **Settings page redesigned** — inline update rows with dividers, monospace "LAN IP" read-only field with Copy button, red glow on the Reset button, added page header with tagline
+- Network and Settings tabs now have titled hero headers with taglines
+
+## Performance & Reliability
+
+- **Instant dashboard on startup** — cached status snapshot is loaded before the first refresh, so the dashboard shows real state immediately instead of blanking for 3-5 seconds
+- **SD-card-friendly config writes** — hot-path writes throttled to at most once per minute (18× reduction). Protects the SD card from unnecessary wear over long-running sessions
+- **Atomic config writes** — write-to-temp-then-rename pattern prevents config corruption on power loss
+- **Splash fade flicker fix** — eliminated the occasional full-opacity flash right before the splash disappears
+- **Lightwalletd updated** to v0.4.19 (from v0.4.18) — includes critical shutdown bug fix, mempool transaction hash fix, and `lightwallet-protocol` v0.4.1
+
+## Smaller Fixes
+
+- Fixed text clipping on Pause, Copy, and Reset ZecNode buttons (global stylesheet override now neutralized locally)
+- Restart button tooltip is now legible (was rendering with a transparent background)
+- Splash screen now has rounded corners
+- Pause button removed from the Logs page — logs already auto-pause when the user switches away from that tab
+
 # v2.1.1 - April 12th 2026 - UI & Bug Fixes
 
 - Fixed lightwalletd permission error (Error 13) when starting on root-owned SSD mount

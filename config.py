@@ -5,10 +5,12 @@ Supports resuming installation after reboot
 """
 
 import json
+import os
+import time
 from pathlib import Path
 from typing import Optional
 
-VERSION = "2.1.1"
+VERSION = "3.0.0"
 
 
 class Config:
@@ -43,6 +45,8 @@ class Config:
     def __init__(self):
         self._ensure_config_dir()
         self._config = self._load_config()
+        self._last_save_time = 0.0
+        self._dirty = False
     
     def _ensure_config_dir(self):
         """Create config directory if it doesn't exist"""
@@ -61,18 +65,47 @@ class Config:
         return self.DEFAULTS.copy()
     
     def save(self):
-        """Save current config to file"""
-        with open(self.CONFIG_FILE, 'w') as f:
+        """Save current config to file atomically (write-temp + rename)."""
+        tmp_path = self.CONFIG_FILE.with_suffix('.json.tmp')
+        with open(tmp_path, 'w') as f:
             json.dump(self._config, f, indent=2)
-    
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp_path, self.CONFIG_FILE)
+        self._last_save_time = time.monotonic()
+        self._dirty = False
+
+    def save_throttled(self, min_interval_seconds: float = 60.0):
+        """Save to disk only if the throttle interval has elapsed since last save.
+        Intended for hot-path values (status snapshots, sync cache) to reduce SD wear."""
+        if not self._dirty:
+            return
+        if time.monotonic() - self._last_save_time < min_interval_seconds:
+            return
+        self.save()
+
+    def flush(self):
+        """Force-save any pending changes, ignoring the throttle. Call on shutdown."""
+        if self._dirty:
+            self.save()
+
     def get(self, key: str, default=None):
         """Get a config value"""
         return self._config.get(key, default)
-    
+
     def set(self, key: str, value):
-        """Set a config value and save"""
+        """Set a config value and save immediately."""
+        if self._config.get(key) == value:
+            return
         self._config[key] = value
         self.save()
+
+    def set_deferred(self, key: str, value):
+        """Set a config value in memory only. Caller must trigger save() / save_throttled() / flush()."""
+        if self._config.get(key) == value:
+            return
+        self._config[key] = value
+        self._dirty = True
     
     # ==================== INSTALLATION STATE ====================
     

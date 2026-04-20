@@ -14,35 +14,37 @@ from PyQt5.QtGui import QFont
 from config import Config
 from installer import InstallerWizard
 from dashboard import DashboardWindow
+from splash import SplashScreen
 
 
-# Professional dark theme with Zcash branding
+# Modern dark theme with Zcash branding
 STYLESHEET = """
 /* Global */
 QWidget {
-    background-color: #0f0f14;
-    color: #e8e8e8;
+    background-color: #0a0a0e;
+    color: #e8e8ec;
     font-family: 'Segoe UI', 'SF Pro Display', 'Ubuntu', sans-serif;
     font-size: 13px;
 }
 
 QMainWindow, QDialog {
-    background-color: #0f0f14;
+    background-color: #0a0a0e;
 }
 
 /* Tooltips */
 QToolTip {
-    background-color: #1a1a24;
-    color: #ffffff;
-    border: 2px solid #4ade80;
-    padding: 12px;
-    border-radius: 8px;
-    font-size: 13px;
+    background: #141419;
+    background-color: #141419;
+    color: #e8e8ec;
+    border: 1px solid #f4b728;
+    padding: 6px 10px;
+    font-size: 12px;
+    opacity: 255;
 }
 
 /* Labels */
 QLabel {
-    color: #e8e8e8;
+    color: #e8e8ec;
     background: transparent;
 }
 
@@ -54,11 +56,11 @@ QLabel#title {
 
 QLabel#subtitle {
     font-size: 14px;
-    color: #888;
+    color: #8b8b96;
 }
 
 QLabel#success {
-    color: #4ade80;
+    color: #22c55e;
 }
 
 QLabel#warning {
@@ -72,7 +74,7 @@ QLabel#error {
 /* Buttons */
 QPushButton {
     background-color: #f4b728;
-    color: #0f0f14;
+    color: #0a0a0e;
     border: none;
     padding: 12px 28px;
     font-weight: 600;
@@ -90,19 +92,19 @@ QPushButton:pressed {
 }
 
 QPushButton:disabled {
-    background-color: #2a2a35;
-    color: #555;
+    background-color: #1e1e26;
+    color: #50505c;
 }
 
 QPushButton#secondary {
-    background-color: #1e1e28;
-    color: #e8e8e8;
-    border: 1px solid #333;
+    background-color: #1e1e26;
+    color: #e8e8ec;
+    border: 1px solid #2a2a34;
 }
 
 QPushButton#secondary:hover {
-    background-color: #28283a;
-    border-color: #444;
+    background-color: #2a2a34;
+    border-color: #3a3a44;
 }
 
 QPushButton#danger {
@@ -117,26 +119,26 @@ QPushButton#danger:hover {
 /* Progress Bar */
 QProgressBar {
     border: none;
-    border-radius: 6px;
-    background-color: #1e1e28;
-    height: 12px;
+    border-radius: 3px;
+    background-color: #1e1e26;
+    height: 6px;
     text-align: center;
 }
 
 QProgressBar::chunk {
     background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
         stop:0 #f4b728, stop:1 #ffc942);
-    border-radius: 6px;
+    border-radius: 3px;
 }
 
 /* Combo Box */
 QComboBox {
-    background-color: #1e1e28;
-    border: 1px solid #333;
+    background-color: #141419;
+    border: 1px solid #1c1c24;
     border-radius: 8px;
     padding: 10px 15px;
     min-width: 200px;
-    color: #e8e8e8;
+    color: #e8e8ec;
 }
 
 QComboBox:hover {
@@ -149,19 +151,19 @@ QComboBox::drop-down {
 }
 
 QComboBox QAbstractItemView {
-    background-color: #1e1e28;
-    border: 1px solid #333;
+    background-color: #141419;
+    border: 1px solid #1c1c24;
     selection-background-color: #f4b728;
-    selection-color: #0f0f14;
+    selection-color: #0a0a0e;
 }
 
 /* Line Edit */
 QLineEdit {
-    background-color: #1e1e28;
-    border: 1px solid #333;
+    background-color: #141419;
+    border: 1px solid #1c1c24;
     border-radius: 8px;
     padding: 10px 15px;
-    color: #e8e8e8;
+    color: #e8e8ec;
 }
 
 QLineEdit:focus {
@@ -170,30 +172,30 @@ QLineEdit:focus {
 
 /* Text Edit (Logs) */
 QTextEdit {
-    background-color: #0a0a0f;
-    border: 1px solid #222;
+    background-color: #08080c;
+    border: 1px solid #1c1c24;
     border-radius: 8px;
-    padding: 10px;
-    font-family: 'JetBrains Mono', 'Consolas', monospace;
+    padding: 12px;
+    font-family: 'JetBrains Mono', 'Consolas', 'Liberation Mono', monospace;
     font-size: 11px;
-    color: #4ade80;
+    color: #22c55e;
 }
 
 /* Scroll Bar */
 QScrollBar:vertical {
-    background-color: #0f0f14;
-    width: 8px;
-    border-radius: 4px;
+    background-color: transparent;
+    width: 6px;
+    border-radius: 3px;
 }
 
 QScrollBar::handle:vertical {
-    background-color: #333;
-    border-radius: 4px;
+    background-color: #2a2a34;
+    border-radius: 3px;
     min-height: 30px;
 }
 
 QScrollBar::handle:vertical:hover {
-    background-color: #444;
+    background-color: #3a3a44;
 }
 
 QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
@@ -202,8 +204,8 @@ QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
 
 /* Menu */
 QMenu {
-    background-color: #16161d;
-    border: 1px solid #333;
+    background-color: #141419;
+    border: 1px solid #1c1c24;
     border-radius: 8px;
     padding: 5px;
 }
@@ -215,7 +217,7 @@ QMenu::item {
 
 QMenu::item:selected {
     background-color: #f4b728;
-    color: #0f0f14;
+    color: #0a0a0e;
 }
 """
 
@@ -243,7 +245,42 @@ def main():
     app.setStyleSheet(STYLESHEET)
     
     config = Config()
-    
+
+    def present(window):
+        """Show the window, with splash before dashboard if it's the dashboard."""
+        if not isinstance(window, DashboardWindow):
+            window.show()
+            return
+
+        try:
+            splash = SplashScreen()
+        except Exception:
+            window.show()
+            return
+
+        from PyQt5.QtCore import QTimer
+
+        app._splash_ref = splash  # prevent GC
+
+        shown = {"done": False}
+        def show_dashboard():
+            if shown["done"]:
+                return
+            shown["done"] = True
+            window.show()
+
+        splash.finished.connect(show_dashboard)
+        splash.show()
+        app.processEvents()
+
+        if window._first_refresh_emitted:
+            splash.request_dismiss()
+        else:
+            window.first_refresh_done.connect(splash.request_dismiss)
+
+        # Safety net: if splash never finishes, show dashboard anyway.
+        QTimer.singleShot(20000, show_dashboard)
+
     # Check if already installed
     if config.is_installed():
         window = DashboardWindow(config)
@@ -265,7 +302,7 @@ def main():
                 config.set("docker_configured", True)
                 config.save()
                 window = DashboardWindow(config)
-                window.show()
+                present(window)
                 sys.exit(app.exec_())
         
         if phase not in [Config.PHASE_NOT_STARTED, Config.PHASE_COMPLETE]:
@@ -394,7 +431,7 @@ def main():
                 config.save()
                 window = InstallerWizard(config)
     
-    window.show()
+    present(window)
     sys.exit(app.exec_())
 
 
