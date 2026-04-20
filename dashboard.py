@@ -2276,8 +2276,9 @@ class DashboardWindow(QMainWindow):
 
         self.tray_stop.setVisible(status.running)
         self.tray_start.setVisible(not status.running)
-        self.tray_update_zebra.setEnabled(not status.running)
-        self.update_zebra_btn.setEnabled(not status.running)
+        # Update handles its own stop/start — only block during in-flight actions.
+        self.tray_update_zebra.setEnabled(not self._action_in_progress)
+        self.update_zebra_btn.setEnabled(not self._action_in_progress)
 
         # Lightwalletd
         self._update_lightwalletd_ui(status, lwd_running)
@@ -2893,7 +2894,9 @@ class DashboardWindow(QMainWindow):
         dialog = ConfirmDialog(
             self,
             "Update Zebra",
-            "Download and install the latest version?\n\nWarning: Major updates may require a full resync of the blockchain."
+            "Download and install the latest Zebra version?\n\n"
+            "Zebra will automatically stop, update, and restart.\n\n"
+            "Warning: Major updates may require a full resync of the blockchain."
         )
         if dialog.exec_() != QDialog.Accepted:
             return
