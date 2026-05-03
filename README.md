@@ -44,6 +44,7 @@ Running a node on your main computer kind of sucks. It eats up resources, needs 
 - Shows sync progress, peer count, disk usage
 - Runs in the system tray
 - Restarts automatically after reboots or power outages
+- Built-in **Learn** tab explaining the tech behind Zcash in plain English
 
 ## Screenshot
 

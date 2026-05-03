@@ -3,6 +3,7 @@
 ## New Features
 
 - **Welcome splash screen** with ZecNode logo and tagline on startup
+- **Learn tab** — plain-English breakdown of the tech behind Zcash (zk-SNARKs, Halo 2, the shielded pools, turnstiles, addresses, viewing keys, Equihash, network upgrades, Zebra, Lightwalletd) in a scrollable card grid
 - **Network tab** — Block Height, Network Hashrate, Total Supply, Shielded % stats + a stacked-area Shielded Supply chart (Sprout / Sapling / Orchard) powered by the zcashinfo.com API
 - **Sync ETA** under the sync bar — shows estimated time until fully synced during initial sync
 - **Update notification badge** — small gold dot on the Settings sidebar button when a newer ZecNode release is available on GitHub

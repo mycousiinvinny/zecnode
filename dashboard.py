@@ -15,7 +15,7 @@ from PyQt5.QtWidgets import (
     QMenu, QAction, QMessageBox, QDialog, QApplication,
     QSpacerItem, QSizePolicy, QFrame, QProgressBar,
     QStackedWidget, QLineEdit, QGraphicsOpacityEffect,
-    QGraphicsDropShadowEffect
+    QGraphicsDropShadowEffect, QScrollArea, QGridLayout
 )
 from PyQt5.QtCore import Qt, QTimer, QThread, pyqtSignal, QPropertyAnimation, QRectF, pyqtProperty, QEasingCurve, QPoint
 from PyQt5.QtGui import QFont, QIcon, QPixmap, QColor, QPainter, QTextCursor, QBrush, QPen
@@ -145,24 +145,28 @@ class ToggleSwitch(QWidget):
 
     def paintEvent(self, event):
         p = QPainter(self)
-        p.setRenderHint(QPainter.Antialiasing)
-        p.setOpacity(self._opacity)
+        if not p.isActive():
+            return
+        try:
+            p.setRenderHint(QPainter.Antialiasing)
+            p.setOpacity(self._opacity)
 
-        w, h = self.width(), self.height()
-        radius = h / 2
+            w, h = self.width(), self.height()
+            radius = h / 2
 
-        if self._checked:
-            track_color = QColor(C['success'])
-        else:
-            track_color = QColor("#3a3a44")
-        p.setPen(Qt.NoPen)
-        p.setBrush(QBrush(track_color))
-        p.drawRoundedRect(QRectF(0, 0, w, h), radius, radius)
+            if self._checked:
+                track_color = QColor(C['success'])
+            else:
+                track_color = QColor("#3a3a44")
+            p.setPen(Qt.NoPen)
+            p.setBrush(QBrush(track_color))
+            p.drawRoundedRect(QRectF(0, 0, w, h), radius, radius)
 
-        knob_size = h - 8
-        p.setBrush(QBrush(QColor("white")))
-        p.drawEllipse(QRectF(self._knob_x, 4, knob_size, knob_size))
-        p.end()
+            knob_size = h - 8
+            p.setBrush(QBrush(QColor("white")))
+            p.drawEllipse(QRectF(self._knob_x, 4, knob_size, knob_size))
+        finally:
+            p.end()
 
 
 class StatusDot(QWidget):
@@ -187,17 +191,22 @@ class StatusDot(QWidget):
 
     def paintEvent(self, event):
         painter = QPainter(self)
-        painter.setRenderHint(QPainter.Antialiasing)
-        if self._state == self.STATE_RUNNING:
-            color = QColor(C['success'])
-        elif self._state == self.STATE_NO_INTERNET:
-            color = QColor(C['warning'])
-        else:
-            color = QColor(C['error'])
-        painter.setBrush(color)
-        painter.setPen(Qt.NoPen)
-        s = self._size
-        painter.drawEllipse(1, 1, s - 2, s - 2)
+        if not painter.isActive():
+            return
+        try:
+            painter.setRenderHint(QPainter.Antialiasing)
+            if self._state == self.STATE_RUNNING:
+                color = QColor(C['success'])
+            elif self._state == self.STATE_NO_INTERNET:
+                color = QColor(C['warning'])
+            else:
+                color = QColor(C['error'])
+            painter.setBrush(color)
+            painter.setPen(Qt.NoPen)
+            s = self._size
+            painter.drawEllipse(1, 1, s - 2, s - 2)
+        finally:
+            painter.end()
 
 
 class StatCard(QFrame):
@@ -280,93 +289,90 @@ class ShieldedSupplyChart(QWidget):
 
     def paintEvent(self, event):
         painter = QPainter(self)
-        painter.setRenderHint(QPainter.Antialiasing, True)
-
-        w, h = self.width(), self.height()
-        pad_l, pad_r, pad_t, pad_b = 8, 8, 10, 18
-        plot_w = max(1, w - pad_l - pad_r)
-        plot_h = max(1, h - pad_t - pad_b)
-
-        if not self._points or len(self._points) < 2:
-            painter.setPen(self.TEXT_COLOR)
-            painter.drawText(self.rect(), Qt.AlignCenter, "Loading shielded supply history…")
+        if not painter.isActive():
             return
+        try:
+            painter.setRenderHint(QPainter.Antialiasing, True)
 
-        pts = self._points
-        ts_min = pts[0]["timestamp"]
-        ts_max = pts[-1]["timestamp"]
-        ts_span = max(1, ts_max - ts_min)
+            w, h = self.width(), self.height()
+            pad_l, pad_r, pad_t, pad_b = 8, 8, 10, 18
+            plot_w = max(1, w - pad_l - pad_r)
+            plot_h = max(1, h - pad_t - pad_b)
 
-        stacked_totals = []
-        max_total = 0
-        for p in pts:
-            sp = p.get("sprout_zatoshis", 0) or 0
-            sa = p.get("sapling_zatoshis", 0) or 0
-            orch = p.get("orchard_zatoshis", 0) or 0
-            total = sp + sa + orch
-            stacked_totals.append((sp, sa, orch, total))
-            if total > max_total:
-                max_total = total
-        if max_total <= 0:
-            return
+            if not self._points or len(self._points) < 2:
+                painter.setPen(self.TEXT_COLOR)
+                painter.drawText(self.rect(), Qt.AlignCenter, "Loading shielded supply history…")
+                return
 
-        def x_for(ts):
-            return pad_l + (ts - ts_min) / ts_span * plot_w
+            pts = self._points
+            ts_min = pts[0]["timestamp"]
+            ts_max = pts[-1]["timestamp"]
+            ts_span = max(1, ts_max - ts_min)
 
-        def y_for(val):
-            # Invert y since Qt's origin is top-left
-            return pad_t + plot_h - (val / max_total) * plot_h
+            stacked_totals = []
+            max_total = 0
+            for p in pts:
+                sp = p.get("sprout_zatoshis", 0) or 0
+                sa = p.get("sapling_zatoshis", 0) or 0
+                orch = p.get("orchard_zatoshis", 0) or 0
+                total = sp + sa + orch
+                stacked_totals.append((sp, sa, orch, total))
+                if total > max_total:
+                    max_total = total
+            if max_total <= 0:
+                return
 
-        def build_polygon(values_top, values_bottom):
-            """values_top/bottom: list of y-values at each x. Returns closed polygon."""
-            from PyQt5.QtGui import QPolygonF
+            def x_for(ts):
+                return pad_l + (ts - ts_min) / ts_span * plot_w
+
+            def y_for(val):
+                return pad_t + plot_h - (val / max_total) * plot_h
+
+            def build_polygon(values_top, values_bottom):
+                from PyQt5.QtGui import QPolygonF
+                from PyQt5.QtCore import QPointF
+                poly = QPolygonF()
+                for i, p in enumerate(pts):
+                    poly.append(QPointF(x_for(p["timestamp"]), values_top[i]))
+                for i in range(len(pts) - 1, -1, -1):
+                    poly.append(QPointF(x_for(pts[i]["timestamp"]), values_bottom[i]))
+                return poly
+
+            baseline = [y_for(0)] * len(pts)
+            top_sprout = [y_for(s[0]) for s in stacked_totals]
+            top_sapling = [y_for(s[0] + s[1]) for s in stacked_totals]
+            top_orchard = [y_for(s[3]) for s in stacked_totals]
+
+            painter.setPen(Qt.NoPen)
+
+            painter.setBrush(QBrush(self.COLOR_SPROUT))
+            painter.drawPolygon(build_polygon(top_sprout, baseline))
+
+            painter.setBrush(QBrush(self.COLOR_SAPLING))
+            painter.drawPolygon(build_polygon(top_sapling, top_sprout))
+
+            painter.setBrush(QBrush(self.COLOR_ORCHARD))
+            painter.drawPolygon(build_polygon(top_orchard, top_sapling))
+
+            line_pen = QPen(QColor(244, 183, 40, 255))
+            line_pen.setWidth(2)
+            painter.setPen(line_pen)
             from PyQt5.QtCore import QPointF
-            poly = QPolygonF()
-            for i, p in enumerate(pts):
-                poly.append(QPointF(x_for(p["timestamp"]), values_top[i]))
-            for i in range(len(pts) - 1, -1, -1):
-                poly.append(QPointF(x_for(pts[i]["timestamp"]), values_bottom[i]))
-            return poly
+            for i in range(len(pts) - 1):
+                painter.drawLine(
+                    QPointF(x_for(pts[i]["timestamp"]), top_orchard[i]),
+                    QPointF(x_for(pts[i + 1]["timestamp"]), top_orchard[i + 1]),
+                )
 
-        # Compute stacked y values (bottom to top: sprout, sapling, orchard)
-        baseline = [y_for(0)] * len(pts)
-        top_sprout = [y_for(s[0]) for s in stacked_totals]
-        top_sapling = [y_for(s[0] + s[1]) for s in stacked_totals]
-        top_orchard = [y_for(s[3]) for s in stacked_totals]
-
-        # Orchard (top layer) first — then sapling, then sprout — drawing back-to-front
-        # Actually we want bottom-most layer first so upper layers overlap correctly.
-        # Draw sprout (bottom), then sapling, then orchard.
-        painter.setPen(Qt.NoPen)
-
-        painter.setBrush(QBrush(self.COLOR_SPROUT))
-        painter.drawPolygon(build_polygon(top_sprout, baseline))
-
-        painter.setBrush(QBrush(self.COLOR_SAPLING))
-        painter.drawPolygon(build_polygon(top_sapling, top_sprout))
-
-        painter.setBrush(QBrush(self.COLOR_ORCHARD))
-        painter.drawPolygon(build_polygon(top_orchard, top_sapling))
-
-        # Thin gold line across the very top (total shielded supply edge)
-        line_pen = QPen(QColor(244, 183, 40, 255))
-        line_pen.setWidth(2)
-        painter.setPen(line_pen)
-        from PyQt5.QtCore import QPointF
-        for i in range(len(pts) - 1):
-            painter.drawLine(
-                QPointF(x_for(pts[i]["timestamp"]), top_orchard[i]),
-                QPointF(x_for(pts[i + 1]["timestamp"]), top_orchard[i + 1]),
-            )
-
-        # X-axis date labels (start and end only, minimal)
-        import datetime as _dt
-        painter.setPen(self.TEXT_COLOR)
-        painter.setFont(QFont("Segoe UI", 8))
-        start_label = _dt.datetime.fromtimestamp(ts_min).strftime("%Y")
-        end_label = _dt.datetime.fromtimestamp(ts_max).strftime("%Y")
-        painter.drawText(pad_l, h - 4, start_label)
-        painter.drawText(w - pad_r - 36, h - 4, end_label)
+            import datetime as _dt
+            painter.setPen(self.TEXT_COLOR)
+            painter.setFont(QFont("Segoe UI", 8))
+            start_label = _dt.datetime.fromtimestamp(ts_min).strftime("%Y")
+            end_label = _dt.datetime.fromtimestamp(ts_max).strftime("%Y")
+            painter.drawText(pad_l, h - 4, start_label)
+            painter.drawText(w - pad_r - 36, h - 4, end_label)
+        finally:
+            painter.end()
 
 
 # ============================================================
@@ -452,46 +458,49 @@ class SparklineWidget(QWidget):
             return
 
         p = QPainter(self)
-        p.setRenderHint(QPainter.Antialiasing)
+        if not p.isActive():
+            return
+        try:
+            p.setRenderHint(QPainter.Antialiasing)
 
-        w, h = self.width(), self.height()
-        pad = 2
+            w, h = self.width(), self.height()
+            pad = 2
 
-        mn = min(self._points)
-        mx = max(self._points)
-        rng = mx - mn if mx != mn else 1.0
+            mn = min(self._points)
+            mx = max(self._points)
+            rng = mx - mn if mx != mn else 1.0
 
-        n = len(self._points)
-        x_step = (w - 2 * pad) / (n - 1)
+            n = len(self._points)
+            x_step = (w - 2 * pad) / (n - 1)
 
-        # How many segments to draw based on progress
-        total_segments = n - 1
-        segments_to_draw = self._progress * total_segments
-        full_segments = int(segments_to_draw)
-        partial = segments_to_draw - full_segments
+            total_segments = n - 1
+            segments_to_draw = self._progress * total_segments
+            full_segments = int(segments_to_draw)
+            partial = segments_to_draw - full_segments
 
-        color = QColor(C['success']) if self._positive else QColor(C['error'])
-        pen = QPen(color, 1.5)
-        pen.setCapStyle(Qt.RoundCap)
-        pen.setJoinStyle(Qt.RoundJoin)
-        p.setPen(pen)
+            color = QColor(C['success']) if self._positive else QColor(C['error'])
+            pen = QPen(color, 1.5)
+            pen.setCapStyle(Qt.RoundCap)
+            pen.setJoinStyle(Qt.RoundJoin)
+            p.setPen(pen)
 
-        prev_x = pad
-        prev_y = h - pad - ((self._points[0] - mn) / rng) * (h - 2 * pad)
+            prev_x = pad
+            prev_y = h - pad - ((self._points[0] - mn) / rng) * (h - 2 * pad)
 
-        for i in range(1, min(full_segments + 1, n)):
-            x = pad + i * x_step
-            y = h - pad - ((self._points[i] - mn) / rng) * (h - 2 * pad)
-            p.drawLine(int(prev_x), int(prev_y), int(x), int(y))
-            prev_x, prev_y = x, y
+            for i in range(1, min(full_segments + 1, n)):
+                x = pad + i * x_step
+                y = h - pad - ((self._points[i] - mn) / rng) * (h - 2 * pad)
+                p.drawLine(int(prev_x), int(prev_y), int(x), int(y))
+                prev_x, prev_y = x, y
 
-        # Draw partial segment for smooth animation
-        if partial > 0 and full_segments + 1 < n:
-            next_x = pad + (full_segments + 1) * x_step
-            next_y = h - pad - ((self._points[full_segments + 1] - mn) / rng) * (h - 2 * pad)
-            interp_x = prev_x + (next_x - prev_x) * partial
-            interp_y = prev_y + (next_y - prev_y) * partial
-            p.drawLine(int(prev_x), int(prev_y), int(interp_x), int(interp_y))
+            if partial > 0 and full_segments + 1 < n:
+                next_x = pad + (full_segments + 1) * x_step
+                next_y = h - pad - ((self._points[full_segments + 1] - mn) / rng) * (h - 2 * pad)
+                interp_x = prev_x + (next_x - prev_x) * partial
+                interp_y = prev_y + (next_y - prev_y) * partial
+                p.drawLine(int(prev_x), int(prev_y), int(interp_x), int(interp_y))
+        finally:
+            p.end()
 
         p.end()
 
@@ -1205,7 +1214,7 @@ class DashboardWindow(QMainWindow):
         sidebar_layout.setSpacing(2)
 
         self._nav_buttons = []
-        nav_items = ["  Dashboard", "  Logs", "  Network", "  Settings"]
+        nav_items = ["  Dashboard", "  Logs", "  Network", "  Learn", "  Settings"]
 
         for i, label in enumerate(nav_items):
             btn = QPushButton(label)
@@ -1269,6 +1278,7 @@ class DashboardWindow(QMainWindow):
         self.page_stack.addWidget(self._create_dashboard_page())
         self.page_stack.addWidget(self._create_logs_page())
         self.page_stack.addWidget(self._create_network_page())
+        self.page_stack.addWidget(self._create_learn_page())
         self.page_stack.addWidget(self._create_settings_page())
 
         content_layout.addWidget(self.page_stack, 1)
@@ -1648,6 +1658,144 @@ class DashboardWindow(QMainWindow):
 
         return page
 
+    def _create_learn_page(self):
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(28, 24, 28, 20)
+        layout.setSpacing(18)
+
+        header = QVBoxLayout()
+        header.setSpacing(2)
+        title = QLabel("Learn")
+        title.setFont(QFont("Segoe UI", 22, QFont.Bold))
+        title.setStyleSheet(f"color: {C['text']}; background: transparent;")
+        header.addWidget(title)
+        tagline = QLabel("The tech behind Zcash, in plain English.")
+        tagline.setStyleSheet(
+            f"color: {C['text_muted']}; font-size: 12px; background: transparent;"
+        )
+        header.addWidget(tagline)
+        layout.addLayout(header)
+
+        # Scrollable card grid
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.NoFrame)
+        scroll.setStyleSheet(f"""
+            QScrollArea {{ background: transparent; border: none; }}
+            QScrollBar:vertical {{
+                background: transparent;
+                width: 10px;
+                margin: 0;
+            }}
+            QScrollBar::handle:vertical {{
+                background: {C['border_light']};
+                border-radius: 5px;
+                min-height: 30px;
+            }}
+            QScrollBar::handle:vertical:hover {{ background: {C['text_muted']}; }}
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
+        """)
+
+        container = QWidget()
+        container.setStyleSheet("background: transparent;")
+        grid = QGridLayout(container)
+        grid.setContentsMargins(0, 0, 4, 0)
+        grid.setHorizontalSpacing(12)
+        grid.setVerticalSpacing(12)
+
+        topics = [
+            ("Zero-Knowledge Proofs",
+             "Proves a transaction is valid without revealing who sent it, who received it, or how much was sent.",
+             "zk-SNARKs"),
+            ("Halo 2",
+             "The proof system Zcash uses today. Unlike older systems, it never required a trusted setup ceremony.",
+             "Halo 2 — Pallas / Vesta curves"),
+            ("Encrypted Memos",
+             "Each shielded transaction can carry a private note. Only the recipient holds the key to read it.",
+             "ChaCha20-Poly1305"),
+            ("Transparent Pool",
+             "Public addresses and amounts, just like Bitcoin. Used mainly for exchange deposits.",
+             "t-addresses (t1…)"),
+            ("Sprout",
+             "The original shielded pool from 2016. Retired and locked behind a one-way turnstile.",
+             "BCTV14 proofs (legacy)"),
+            ("Sapling",
+             "The shielded pool that made private transactions fast enough to run on a phone.",
+             "Groth16 proofs — Jubjub curve"),
+            ("Orchard",
+             "The newest shielded pool. Faster, simpler, and built on Halo 2 with no trusted setup.",
+             "Halo 2 proofs — Pallas curve"),
+            ("Turnstiles",
+             "One-way doors between shielded pools. They make sure no more ZEC ever leaves a pool than entered it.",
+             "Pool value balance checks"),
+            ("Address Types",
+             "t1 is public. zs is shielded. u1 is a Unified Address that can hold all types in one.",
+             "Transparent / Sapling / Unified"),
+            ("Viewing Keys",
+             "Share read-only access to your wallet without giving up the ability to spend. Useful for audits and accounting.",
+             "ZIP 32 incoming / full viewing keys"),
+            ("Equihash",
+             "The mining puzzle that secures the network. Memory-hard, so it resists giant ASIC monopolies.",
+             "Equihash 200,9 (Proof of Work)"),
+            ("Network Upgrades",
+             "Every couple of years, Zcash hard-forks to add features. Sapling, NU5, NU6, NU7 — each step adds new tech.",
+             "ZIPs — Zcash Improvement Proposals"),
+            ("Zebra",
+             "The modern Rust full node, built by the Zcash Foundation. This is the node ZecNode runs.",
+             "Zebra"),
+            ("Lightwalletd",
+             "The middleman that lets phone wallets sync without downloading the whole blockchain.",
+             "Lightwalletd server"),
+        ]
+
+        for i, (title_text, body_text, tech_text) in enumerate(topics):
+            grid.addWidget(self._make_learn_card(title_text, body_text, tech_text), i // 2, i % 2)
+
+        # Make both columns share width evenly
+        grid.setColumnStretch(0, 1)
+        grid.setColumnStretch(1, 1)
+
+        scroll.setWidget(container)
+        layout.addWidget(scroll, 1)
+
+        return page
+
+    def _make_learn_card(self, title_text, body_text, tech_text):
+        card = QFrame()
+        card.setObjectName("learnCard")
+        card.setStyleSheet(f"""
+            #learnCard {{
+                background-color: {C['surface']};
+                border: 1px solid {C['border']};
+                border-radius: 12px;
+            }}
+        """)
+        v = QVBoxLayout(card)
+        v.setContentsMargins(18, 16, 18, 16)
+        v.setSpacing(8)
+
+        title = QLabel(title_text)
+        title.setFont(QFont("Segoe UI", 13, QFont.Bold))
+        title.setStyleSheet(f"color: {C['text']}; background: transparent; border: none;")
+        v.addWidget(title)
+
+        body = QLabel(body_text)
+        body.setWordWrap(True)
+        body.setStyleSheet(
+            f"color: {C['text_sec']}; font-size: 12px; background: transparent; border: none; line-height: 1.5;"
+        )
+        v.addWidget(body)
+
+        tech = QLabel(tech_text)
+        tech.setStyleSheet(
+            f"color: {C['text_muted']}; font-size: 10px; font-weight: 600; "
+            f"background: transparent; border: none; letter-spacing: 0.5px;"
+        )
+        v.addWidget(tech)
+
+        return card
+
     def _create_settings_page(self):
         page = QWidget()
         layout = QVBoxLayout(page)
@@ -1770,7 +1918,7 @@ class DashboardWindow(QMainWindow):
             "Zebra",
             self.settings_zebra_label,
             "Update",
-            secondary_btn_css,
+            primary_btn_css,
             self._update_zebra,
         )
         uc_layout.addLayout(zeb_row)
@@ -1787,7 +1935,7 @@ class DashboardWindow(QMainWindow):
             "Lightwalletd",
             self.settings_lwd_label,
             "Update",
-            secondary_btn_css,
+            primary_btn_css,
             self._update_lightwalletd_image,
         )
         uc_layout.addLayout(lwd_row)
@@ -2649,9 +2797,9 @@ class DashboardWindow(QMainWindow):
 
     def _refresh_update_badge(self):
         """Toggle the gold-dot badge on the Settings nav button and Update ZecNode button."""
-        # Settings sidebar button is index 3 (Dashboard, Logs, Network, Settings)
+        # Settings sidebar button is index 4 (Dashboard, Logs, Network, Learn, Settings)
         try:
-            settings_btn = self._nav_buttons[3]
+            settings_btn = self._nav_buttons[4]
             base = "  Settings"
             settings_btn.setText(f"{base}  \u2022" if self._update_available else base)
         except (IndexError, AttributeError):
