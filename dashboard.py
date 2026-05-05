@@ -3049,6 +3049,10 @@ class DashboardWindow(QMainWindow):
         if dialog.exec_() != QDialog.Accepted:
             return
 
+        # Force a re-query of the Zebra version after the update finishes —
+        # otherwise the dashboard would keep showing the pre-update cached version.
+        self._zebra_version_fetched = False
+
         self.update_dialog = UpdateDialog(self, "Updating Zebra...")
         self.update_dialog.show()
 
