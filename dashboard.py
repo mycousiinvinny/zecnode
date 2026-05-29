@@ -2537,18 +2537,22 @@ class DashboardWindow(QMainWindow):
     # ── Version & price ───────────────────────────────────
 
     def _fetch_zebra_version(self):
-        self._zebra_version_fetched = True
+        if getattr(self, '_zebra_version_fetch_in_flight', False):
+            return
+        self._zebra_version_fetch_in_flight = True
 
         def get_version():
             return self.node_manager.get_zebra_version(self.config)
 
         def on_version_done(version):
+            self._zebra_version_fetch_in_flight = False
             if version and version != "--":
                 self._cached_zebra_version = version
                 self.zebra_version_label.setText(f"v{version}")
                 self.settings_zebra_label.setText(f"v{version}")
                 self.config.set("cached_zebra_version", version)
                 self.config.save()
+                self._zebra_version_fetched = True
 
         self._run_in_thread(get_version, on_version_done)
 
@@ -3113,6 +3117,9 @@ class DashboardWindow(QMainWindow):
                 subprocess.Popen([sys.executable, main_py], cwd=os.path.join(home, "zecnode"))
                 os._exit(0)
             else:
+                # Re-arm version-cache reset; the one in _update_zebra gets
+                # clobbered by polls firing during the update window.
+                self._zebra_version_fetched = False
                 dialog = MessageDialog(self, "Update Complete", message, is_error=False)
                 dialog.exec_()
         else:
