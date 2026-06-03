@@ -1019,6 +1019,7 @@ class DashboardWindow(QMainWindow):
         self._lwd_auto_action_in_progress = False
         self._arti_action_in_progress = False
         self._arti_auto_action_in_progress = False
+        self._arti_onion_fetch_in_progress = False
         self._closing = False
         self.refresh_thread = None
         cached_ver = self.config.get("cached_zebra_version", None)
@@ -2647,7 +2648,25 @@ class DashboardWindow(QMainWindow):
             self.arti_status_dot.set_state(StatusDot.STATE_RUNNING)
             self.arti_status.setText("Live on Tor")
             self.arti_status.setStyleSheet(f"color: {C['success']}; font-size: 11px; background: transparent; border: none;")
-            self._show_onion(self.config.get("arti_onion_address", ""))
+            onion = self.config.get("arti_onion_address", "")
+            self._show_onion(onion)
+            # Self-heal: Arti is running but we don't have the address cached yet
+            # (e.g. the first-run fetch missed during the initial image pull).
+            if not onion and not self._arti_onion_fetch_in_progress:
+                self._arti_onion_fetch_in_progress = True
+
+                def _onion_fetched(addr):
+                    self._arti_onion_fetch_in_progress = False
+                    if self._closing:
+                        return
+                    if addr:
+                        self.config.set("arti_onion_address", addr)
+                        self._show_onion(addr)
+
+                self._run_in_thread(
+                    lambda: self.node_manager.get_onion_address(),
+                    _onion_fetched
+                )
         elif arti_enabled:
             # Enabled but waiting on the chain / sync
             self.arti_status_dot.set_state(StatusDot.STATE_STOPPED)
