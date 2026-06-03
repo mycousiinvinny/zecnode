@@ -45,6 +45,23 @@ Running a node on your main computer kind of sucks. It eats up resources, needs 
 - Runs in the system tray
 - Restarts automatically after reboots or power outages
 - Built-in **Learn** tab explaining the tech behind Zcash in plain English
+- Optional **Tor** support — share your node over a private `.onion` address
+
+## Connect privately over Tor (.onion)
+
+ZecNode can expose your node over Tor as a `.onion` address, so wallets can connect **without ever revealing their IP to your server**. It's an opt-in toggle in Settings (and in the web dashboard) — flip it on and your node gets a permanent `.onion` address.
+
+### Connecting a wallet to it
+
+A `.onion` can only be reached *through* Tor, so the wallet needs a Tor path:
+
+1. Install **Orbot** (the Tor app) on the phone and turn on its VPN mode — or use a wallet that has Tor built in.
+2. In the wallet's server settings, point lightwalletd at your address:
+   `http://<your-node>.onion:9067`
+   Use `http`, not `https` — Tor already encrypts the connection end-to-end, so no TLS is needed.
+3. Sync. The wallet now talks to your node entirely over Tor.
+
+Your normal (clearnet) wallet access keeps working unchanged — Tor is just an extra private door.
 
 ## Screenshot
 

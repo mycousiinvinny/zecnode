@@ -1854,6 +1854,9 @@ class DashboardWindow(QMainWindow):
             ("Lightwalletd",
              "The middleman that lets phone wallets sync without downloading the whole blockchain.",
              "Lightwalletd server"),
+            ("Tor Onion Service",
+             "Lets wallets reach your node through a private .onion address over Tor, so their IP is never exposed to your server.",
+             "Arti — Tor in Rust"),
         ]
 
         for i, (title_text, body_text, tech_text) in enumerate(topics):
