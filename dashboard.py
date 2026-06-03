@@ -1041,11 +1041,11 @@ class DashboardWindow(QMainWindow):
         self.price_timer.start(120000)
         self._fetch_price()
 
-        # Update check (GitHub releases) — throttled to once per 12h
+        # Update check (GitHub releases) — fresh on launch, then every 3h
         self._update_check_timer = QTimer()
         self._update_check_timer.timeout.connect(self._check_for_updates)
-        self._update_check_timer.start(12 * 60 * 60 * 1000)
-        self._check_for_updates()
+        self._update_check_timer.start(3 * 60 * 60 * 1000)
+        self._check_for_updates(force=True)
 
         # Logs timer (only active when on logs page)
         self._log_timer = QTimer()
@@ -2952,15 +2952,18 @@ class DashboardWindow(QMainWindow):
         else:
             self._update_tray_icon("stopped")
 
-    def _check_for_updates(self):
-        """Check GitHub for a newer ZecNode release. Cached via config; throttled to 12h."""
+    def _check_for_updates(self, force=False):
+        """Check GitHub for a newer ZecNode release. Cached via config.
+        Periodic checks (the 3h timer) are throttled to 2h; `force` (used on
+        launch) bypasses that, with a 60s floor to avoid hammering on rapid restarts."""
         if self._closing:
             return
 
         import time as _time
         now = int(_time.time())
         last_check = self.config.get("last_update_check", 0)
-        if now - last_check < 12 * 3600:
+        min_interval = 60 if force else 2 * 3600
+        if now - last_check < min_interval:
             # Use cached result
             tag = self.config.get("latest_release_tag", "")
             notes = self.config.get("latest_release_notes", "")
