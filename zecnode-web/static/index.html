@@ -540,6 +540,17 @@
                     <span class="copy-hint">tap to copy</span>
                 </div>
             </div>
+
+            <div class="lightwalletd-section">
+                <div class="toggle-row">
+                    <span class="stat-label">Tor (.onion)</span>
+                    <div class="toggle" id="artiToggle"></div>
+                </div>
+                <div class="lwd-url" id="artiOnion">
+                    Off
+                    <span class="copy-hint"></span>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -753,6 +764,22 @@
                     lwdUrl.innerHTML = `Not running<span class="copy-hint"></span>`;
                 }
 
+                // Arti / Tor
+                const artiToggle = document.getElementById('artiToggle');
+                const artiOnion = document.getElementById('artiOnion');
+                if (data.arti) {
+                    if (data.arti.running && data.arti.onion) {
+                        artiToggle.classList.add('active');
+                        artiOnion.innerHTML = `${data.arti.onion}:9067<span class="copy-hint">tap to copy</span>`;
+                    } else if (data.arti.enabled) {
+                        artiToggle.classList.add('active');
+                        artiOnion.innerHTML = `Starts when synced<span class="copy-hint"></span>`;
+                    } else {
+                        artiToggle.classList.remove('active');
+                        artiOnion.innerHTML = `Off<span class="copy-hint"></span>`;
+                    }
+                }
+
             } catch (error) {
                 console.error('Failed to fetch status:', error);
             }
@@ -856,6 +883,38 @@
             }
         }
 
+        async function toggleArti() {
+            const artiToggle = document.getElementById('artiToggle');
+            const artiOnion = document.getElementById('artiOnion');
+            const isActive = artiToggle.classList.contains('active');
+
+            if (isActive) {
+                artiToggle.classList.remove('active');
+                artiOnion.innerHTML = `Off<span class="copy-hint"></span>`;
+                showToast('Stopping Tor...');
+            } else {
+                artiToggle.classList.add('active');
+                artiOnion.innerHTML = `Starting Tor...<span class="copy-hint"></span>`;
+                showToast('Starting Tor (may take a minute)...');
+            }
+
+            try {
+                const response = await fetch(`${API_BASE}/api/arti/toggle`, { method: 'POST' });
+                const data = await response.json();
+                if (data.success) {
+                    showToast(data.running ? 'Tor enabled' : 'Tor disabled');
+                } else {
+                    showToast(`Error: ${data.message}`);
+                    if (isActive) { artiToggle.classList.add('active'); }
+                    else { artiToggle.classList.remove('active'); }
+                }
+                fetchStatus();
+            } catch (error) {
+                showToast('Failed to toggle Tor');
+                fetchStatus();
+            }
+        }
+
         async function openLogs() {
             try {
                 const response = await fetch(`${API_BASE}/api/logs?lines=50`);
@@ -937,11 +996,29 @@
             toggleLightwalletd();
         });
 
+        // Arti / Tor toggle
+        document.getElementById('artiToggle').addEventListener('click', function(e) {
+            e.stopPropagation();
+            toggleArti();
+        });
+
         // Copy URL to clipboard
         document.getElementById('lwdUrl').addEventListener('click', function() {
             const url = this.textContent.replace('tap to copy', '').trim();
             if (url && url !== 'Not running') {
                 navigator.clipboard.writeText(url).then(() => {
+                    showToast('Copied to clipboard!');
+                }).catch(() => {
+                    showToast('Failed to copy');
+                });
+            }
+        });
+
+        // Copy .onion to clipboard
+        document.getElementById('artiOnion').addEventListener('click', function() {
+            const txt = this.textContent.replace('tap to copy', '').trim();
+            if (txt && txt.endsWith(':9067')) {
+                navigator.clipboard.writeText(txt).then(() => {
                     showToast('Copied to clipboard!');
                 }).catch(() => {
                     showToast('Failed to copy');

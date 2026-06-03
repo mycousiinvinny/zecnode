@@ -48,6 +48,12 @@ class NodeManager:
     LWD_CONTAINER_NAME = "lightwalletd"
     LWD_IMAGE_NAME = "mycousiinvinny/lightwalletd:arm64"
     LWD_PORT = 9067
+
+    # Arti (Tor onion-service sidecar in front of lightwalletd)
+    ARTI_CONTAINER_NAME = "arti"
+    ARTI_IMAGE_NAME = "mycousiinvinny/arti:arm64"
+    ARTI_NICKNAME = "zecnode"
+    ARTI_DATA_DIR = "/mnt/zebra-data/arti"   # persistent onion keys (BACK THIS UP)
     
     # Directory structure on SSD
     # Step 6: sudo mkdir -p /mnt/zebra-data/{docker,containerd}
@@ -1375,4 +1381,166 @@ gsettings set org.gnome.desktop.session idle-delay 0 2>/dev/null || true
     def get_lightwalletd_url(self) -> str:
         """Get the lightwalletd gRPC URL"""
         return f"http://{self.get_local_ip()}:{self.LWD_PORT}"
+
+    # ==================== ARTI / TOR ONION SERVICE ====================
+    #
+    # Arti sits in front of lightwalletd, exposing <onion>.onion:9067 over Tor.
+    # The clearnet path stays untouched; this is an opt-in privacy door.
+    # Onion keys live in ARTI_DATA_DIR on the SSD and are permanent.
+
+    def is_arti_running(self) -> bool:
+        """Check if the Arti (Tor) container is running"""
+        try:
+            result = subprocess.run(
+                ["docker", "ps", "-q", "-f", f"name={self.ARTI_CONTAINER_NAME}"],
+                capture_output=True, text=True, timeout=5
+            )
+            return bool(result.stdout.strip())
+        except:
+            return False
+
+    def _get_lwd_container_ip(self) -> Optional[str]:
+        """Look up lightwalletd's IP on the zecnode docker bridge.
+
+        Arti's proxy_ports requires a literal IP:port (it does not resolve
+        container names), so we template lightwalletd's current bridge IP
+        into arti.toml at start time instead of recreating the network."""
+        try:
+            result = subprocess.run(
+                ["docker", "inspect", "-f",
+                 "{{.NetworkSettings.Networks.zecnode.IPAddress}}",
+                 self.LWD_CONTAINER_NAME],
+                capture_output=True, text=True, timeout=5
+            )
+            ip = result.stdout.strip()
+            return ip if ip else None
+        except:
+            return None
+
+    def _write_arti_config(self, lwd_ip: str) -> Path:
+        """Write arti.toml (forwarding the onion port to lightwalletd) to
+        ~/.zecnode and return its path. Bind-mounted read-only into the container."""
+        conf_dir = Path.home() / ".zecnode"
+        conf_dir.mkdir(exist_ok=True)
+        conf_file = conf_dir / "arti.toml"
+        conf_file.write_text(
+            "[application]\n"
+            "allow_running_as_root = true\n\n"
+            "[storage]\n"
+            'state_dir = "/var/lib/arti"\n'
+            'cache_dir = "/var/lib/arti/cache"\n\n'
+            "[storage.permissions]\n"
+            "dangerously_trust_everyone = true\n\n"
+            "[logging]\n"
+            'console = "info"\n\n'
+            f'[onion_services."{self.ARTI_NICKNAME}"]\n'
+            "enabled = true\n"
+            "proxy_ports = [\n"
+            f'    ["9067", "{lwd_ip}:9067"],\n'
+            "]\n"
+        )
+        return conf_file
+
+    def get_onion_address(self, generate: bool = False) -> Optional[str]:
+        """Return the node's .onion address, or None if not available yet.
+
+        With generate=True the identity key is created if missing (this is what
+        makes the address permanent). Runs a short-lived arti container that
+        reads/creates the key in ARTI_DATA_DIR."""
+        try:
+            subprocess.run(["sudo", "mkdir", "-p", self.ARTI_DATA_DIR],
+                           capture_output=True, timeout=5)
+            conf_file = Path.home() / ".zecnode" / "arti.toml"
+            if not conf_file.exists():
+                # Need a config to know the nickname; the IP is irrelevant for key ops
+                self._write_arti_config(self._get_lwd_container_ip() or "127.0.0.1")
+            gen = "if-needed" if generate else "no"
+            result = subprocess.run([
+                "docker", "run", "--rm",
+                "-v", f"{self.ARTI_DATA_DIR}:/var/lib/arti",
+                "-v", f"{conf_file}:/etc/arti.toml:ro",
+                self.ARTI_IMAGE_NAME,
+                "-c", "/etc/arti.toml", "--disable-fs-permission-checks",
+                "hss", "--nickname", self.ARTI_NICKNAME,
+                "onion-address", "--generate", gen
+            ], capture_output=True, text=True, timeout=60)
+            for line in result.stdout.splitlines():
+                line = line.strip()
+                if line.endswith(".onion"):
+                    return line
+            return None
+        except:
+            return None
+
+    def start_arti(self) -> Tuple[bool, str]:
+        """Start the Arti Tor onion-service sidecar.
+
+        Auto-starts the dependency chain (Zebra -> lightwalletd) if needed,
+        then templates lightwalletd's bridge IP into arti.toml and launches Arti."""
+        try:
+            if self.is_arti_running():
+                return True, "Arti already running"
+
+            # Ensure the chain is up (one toggle, it just works)
+            if not self.get_status().running:
+                self.start_node()
+            if not self.is_lightwalletd_running():
+                self.start_lightwalletd()
+
+            # Arti's proxy target must be a literal IP — wait for lwd's bridge IP
+            lwd_ip = None
+            for _ in range(15):
+                lwd_ip = self._get_lwd_container_ip()
+                if lwd_ip:
+                    break
+                time.sleep(1)
+            if not lwd_ip:
+                return False, "Could not determine lightwalletd address"
+
+            conf_file = self._write_arti_config(lwd_ip)
+
+            # Persistent key dir on the SSD (root-owned mount; arti runs as root)
+            subprocess.run(["sudo", "mkdir", "-p", self.ARTI_DATA_DIR],
+                           capture_output=True, timeout=5)
+
+            # Pre-generate the identity key so the .onion is known and stable
+            self.get_onion_address(generate=True)
+
+            subprocess.run(["docker", "rm", "-f", self.ARTI_CONTAINER_NAME],
+                           capture_output=True)
+            subprocess.run(["docker", "network", "create", "zecnode"],
+                           capture_output=True)
+            result = subprocess.run([
+                "docker", "run", "-d",
+                "--name", self.ARTI_CONTAINER_NAME,
+                "--network", "zecnode",
+                "-v", f"{self.ARTI_DATA_DIR}:/var/lib/arti",
+                "-v", f"{conf_file}:/etc/arti.toml:ro",
+                "--restart", "unless-stopped",
+                self.ARTI_IMAGE_NAME,
+                "proxy", "-c", "/etc/arti.toml", "--disable-fs-permission-checks"
+            ], capture_output=True, text=True, timeout=120)
+
+            if result.returncode != 0:
+                return False, f"Failed to start Arti: {result.stderr}"
+            return True, "Arti started"
+        except subprocess.TimeoutExpired:
+            return False, "Timeout starting Arti"
+        except Exception as e:
+            return False, f"Error: {str(e)}"
+
+    def stop_arti(self) -> Tuple[bool, str]:
+        """Stop the Arti container"""
+        try:
+            subprocess.run(
+                ["docker", "stop", "-t", "3", self.ARTI_CONTAINER_NAME],
+                capture_output=True, text=True, timeout=10
+            )
+            subprocess.run(
+                ["docker", "rm", "-f", self.ARTI_CONTAINER_NAME],
+                capture_output=True
+            )
+            return True, "Arti stopped"
+        except Exception as e:
+            return False, f"Error: {str(e)}"
 

@@ -530,23 +530,30 @@ class NodeActionThread(QThread):
             if ok and self.lwd_enabled:
                 self.node_manager.start_lightwalletd()
         elif self.action == "stop":
+            if self.node_manager.is_arti_running():
+                self.node_manager.stop_arti()
             if self.node_manager.is_lightwalletd_running():
                 self.node_manager.stop_lightwalletd()
             ok, msg = self.node_manager.stop_node()
         elif self.action == "restart":
+            arti_was_running = self.node_manager.is_arti_running()
             lwd_was_running = self.node_manager.is_lightwalletd_running()
+            if arti_was_running:
+                self.node_manager.stop_arti()
             if lwd_was_running:
                 self.node_manager.stop_lightwalletd()
             ok, msg = self.node_manager.restart_node()
             if ok and (self.lwd_enabled or lwd_was_running):
                 self.node_manager.start_lightwalletd()
+            if ok and arti_was_running:
+                self.node_manager.start_arti()
         else:
             ok, msg = False, "Unknown action"
         self.finished.emit(ok, msg)
 
 
 class RefreshThread(QThread):
-    finished = pyqtSignal(object, bool, str, str, bool)
+    finished = pyqtSignal(object, bool, str, str, bool, bool)
 
     _cached_internet = True
     _last_internet_check = 0
@@ -590,8 +597,11 @@ class RefreshThread(QThread):
         lwd_running = self.node_manager.is_lightwalletd_running()
         if not self._running:
             return
+        arti_running = self.node_manager.is_arti_running()
+        if not self._running:
+            return
 
-        self.finished.emit(status, has_internet, ssd, sd, lwd_running)
+        self.finished.emit(status, has_internet, ssd, sd, lwd_running, arti_running)
 
 
 class UpdateThread(QThread):
@@ -634,6 +644,7 @@ class UpdateThread(QThread):
                             curl -sSL -o installer.py "{github_raw}/installer.py" && \
                             curl -sSL -o dashboard.py "{github_raw}/dashboard.py" && \
                             curl -sSL -o splash.py "{github_raw}/splash.py" && \
+                            curl -sSL -o uninstall.sh "{github_raw}/uninstall.sh" && \
                             mkdir -p zecnode-web/static && \
                             curl -sSL -o zecnode-web/server.py "{github_raw}/zecnode-web/server.py" && \
                             curl -sSL -o zecnode-web/config.py "{github_raw}/zecnode-web/config.py" && \
@@ -1006,6 +1017,8 @@ class DashboardWindow(QMainWindow):
         self._action_in_progress = False
         self._lwd_action_in_progress = False
         self._lwd_auto_action_in_progress = False
+        self._arti_action_in_progress = False
+        self._arti_auto_action_in_progress = False
         self._closing = False
         self.refresh_thread = None
         cached_ver = self.config.get("cached_zebra_version", None)
@@ -1481,6 +1494,100 @@ class DashboardWindow(QMainWindow):
         lr.addWidget(self.lwd_toggle)
 
         layout.addWidget(lwd_row)
+
+        # ── Tor / Arti row (compact) ────────────────────────────
+        arti_row = QFrame()
+        arti_row.setObjectName("artiRow")
+        arti_row.setStyleSheet(f"""
+            #artiRow {{
+                background-color: {C['surface']};
+                border: 1px solid {C['border']};
+                border-radius: 10px;
+            }}
+        """)
+        arr = QHBoxLayout(arti_row)
+        arr.setContentsMargins(18, 10, 18, 10)
+        arr.setSpacing(10)
+
+        self.arti_status_dot = StatusDot(9)
+        arr.addWidget(self.arti_status_dot)
+
+        arti_title = QLabel("Tor (.onion)")
+        arti_title.setFont(QFont("Segoe UI", 13, QFont.Bold))
+        arti_title.setStyleSheet(f"color: {C['text']}; background: transparent; border: none;")
+        arr.addWidget(arti_title)
+
+        arti_info = QLabel("ⓘ")
+        arti_info.setStyleSheet(f"""
+            QLabel {{
+                color: {C['text_muted']}; font-size: 11px; border: none; background: transparent;
+            }}
+            QLabel:hover {{ color: {C['accent']}; }}
+            QToolTip {{
+                background-color: {C['surface']}; color: {C['text']};
+                border: 1px solid {C['accent']}; padding: 10px; border-radius: 6px; font-size: 12px;
+            }}
+        """)
+        arti_info.setToolTip(
+            "Tor lets people reach your node through a private .onion address,\n"
+            "so their IP is never exposed to your server.\n\n"
+            "• Maximum privacy — connections are routed over Tor\n"
+            "• Your normal (clearnet) wallet access keeps working unchanged\n"
+            "• The .onion address is permanent (saved on your SSD)\n\n"
+            "Turns on automatically once your node is synced."
+        )
+        arr.addWidget(arti_info)
+
+        self.arti_status = QLabel("")
+        self.arti_status.setStyleSheet(f"color: {C['text_sec']}; font-size: 11px; background: transparent; border: none;")
+        arr.addWidget(self.arti_status)
+
+        arr.addStretch()
+
+        self.arti_toggle = ToggleSwitch()
+        self.arti_toggle.toggled.connect(self._toggle_arti_from_toggle)
+        arr.addWidget(self.arti_toggle)
+
+        layout.addWidget(arti_row)
+
+        # ── .onion address row (hidden until Tor is live) ───────
+        self.arti_onion_row = QFrame()
+        self.arti_onion_row.setObjectName("artiOnionRow")
+        self.arti_onion_row.setStyleSheet(f"""
+            #artiOnionRow {{
+                background-color: {C['surface']};
+                border: 1px solid {C['border']};
+                border-radius: 10px;
+            }}
+        """)
+        aor = QHBoxLayout(self.arti_onion_row)
+        aor.setContentsMargins(18, 8, 18, 8)
+        aor.setSpacing(10)
+
+        self.arti_onion_label = QLabel("")
+        self.arti_onion_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        self.arti_onion_label.setWordWrap(True)
+        self.arti_onion_label.setStyleSheet(
+            f"color: {C['text_sec']}; font-size: 11px; font-family: monospace; "
+            f"background: transparent; border: none;"
+        )
+        aor.addWidget(self.arti_onion_label, 1)
+
+        self.arti_copy_btn = QPushButton("Copy")
+        self.arti_copy_btn.setCursor(Qt.PointingHandCursor)
+        self.arti_copy_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {C['accent']}; color: #1a1a1a;
+                border: none; border-radius: 6px;
+                padding: 4px 14px; min-width: 0px; font-size: 11px; font-weight: 600;
+            }}
+            QPushButton:hover {{ background-color: {C['accent']}; }}
+        """)
+        self.arti_copy_btn.clicked.connect(self._copy_onion)
+        aor.addWidget(self.arti_copy_btn)
+
+        self.arti_onion_row.setVisible(False)
+        layout.addWidget(self.arti_onion_row)
 
         layout.addStretch()
 
@@ -2306,7 +2413,7 @@ class DashboardWindow(QMainWindow):
         except ValueError:
             pass
 
-    def _on_refresh_done(self, status, has_internet, ssd, sd, lwd_running):
+    def _on_refresh_done(self, status, has_internet, ssd, sd, lwd_running, arti_running):
         if self._closing:
             return
         first_refresh = not self._first_refresh_emitted
@@ -2431,8 +2538,11 @@ class DashboardWindow(QMainWindow):
         # Lightwalletd
         self._update_lightwalletd_ui(status, lwd_running)
 
+        # Arti / Tor
+        self._update_arti_ui(status, arti_running, lwd_running)
+
         # Persist snapshot so next startup looks instant
-        self._save_status_snapshot(status, has_internet, ssd, sd, lwd_running)
+        self._save_status_snapshot(status, has_internet, ssd, sd, lwd_running, arti_running)
 
         if first_refresh:
             self.first_refresh_done.emit()
@@ -2481,6 +2591,70 @@ class DashboardWindow(QMainWindow):
             self.lwd_status.setText("")
             self.lwd_status_dot.set_state(StatusDot.STATE_STOPPED)
             self.lwd_toggle.setEnabled(True)
+
+    def _start_arti_and_fetch_onion(self):
+        """Worker: start Arti and return (ok, onion). Config is written by the
+        main-thread callback to avoid cross-thread config writes."""
+        ok, _ = self.node_manager.start_arti()
+        onion = self.node_manager.get_onion_address() if ok else None
+        return ok, onion
+
+    def _show_onion(self, onion):
+        """Show or hide the .onion address row."""
+        if onion:
+            self.arti_onion_label.setText(onion)
+            self.arti_onion_row.setVisible(True)
+        else:
+            self.arti_onion_row.setVisible(False)
+
+    def _update_arti_ui(self, zebra_status, arti_running, lwd_running):
+        arti_enabled = self.config.get("arti_enabled", False)
+
+        # Option A: keep the chain in sync with the user's intent.
+        # Arti needs lightwalletd up (which needs Zebra synced), so it
+        # auto-starts once lightwalletd is running and stops if it goes away.
+        if not self._arti_auto_action_in_progress:
+            if arti_enabled and lwd_running and not arti_running:
+                self._arti_auto_action_in_progress = True
+
+                def _auto_done(result):
+                    self._arti_auto_action_in_progress = False
+                    if self._closing:
+                        return
+                    ok, onion = result
+                    if ok and onion:
+                        self.config.set("arti_onion_address", onion)
+
+                self._run_in_thread(self._start_arti_and_fetch_onion, _auto_done)
+            elif arti_running and not lwd_running:
+                self._arti_auto_action_in_progress = True
+                self._run_in_thread(
+                    lambda: self.node_manager.stop_arti(),
+                    lambda result: setattr(self, '_arti_auto_action_in_progress', False)
+                )
+
+        if self._arti_action_in_progress:
+            return
+
+        # Toggle reflects intent (enabled), so it stays on while waiting for sync.
+        self.arti_toggle.setChecked(arti_enabled)
+        self.arti_toggle.setEnabled(True)
+
+        if arti_running:
+            self.arti_status_dot.set_state(StatusDot.STATE_RUNNING)
+            self.arti_status.setText("Live on Tor")
+            self.arti_status.setStyleSheet(f"color: {C['success']}; font-size: 11px; background: transparent; border: none;")
+            self._show_onion(self.config.get("arti_onion_address", ""))
+        elif arti_enabled:
+            # Enabled but waiting on the chain / sync
+            self.arti_status_dot.set_state(StatusDot.STATE_STOPPED)
+            self.arti_status.setText("Starts when synced")
+            self.arti_status.setStyleSheet(f"color: {C['text_sec']}; font-size: 11px; background: transparent; border: none;")
+            self._show_onion("")
+        else:
+            self.arti_status_dot.set_state(StatusDot.STATE_STOPPED)
+            self.arti_status.setText("")
+            self._show_onion("")
 
     # ── Node actions ──────────────────────────────────────
 
@@ -2650,7 +2824,7 @@ class DashboardWindow(QMainWindow):
             return f"{n/1e3:.2f}K"
         return f"{n:.0f}"
 
-    def _save_status_snapshot(self, status, has_internet, ssd, sd, lwd_running):
+    def _save_status_snapshot(self, status, has_internet, ssd, sd, lwd_running, arti_running=False):
         """Persist the current status so the next startup can paint it immediately.
         Deferred + throttled to ~once per minute to spare the SD card."""
         try:
@@ -2664,6 +2838,7 @@ class DashboardWindow(QMainWindow):
                 "ssd": str(ssd or "--"),
                 "sd": str(sd or "--"),
                 "lwd_running": bool(lwd_running),
+                "arti_running": bool(arti_running),
             }
             self.config.set_deferred("status_snapshot", snap)
             self.config.save_throttled(60.0)
@@ -2685,6 +2860,7 @@ class DashboardWindow(QMainWindow):
         ssd = snap.get("ssd", "--")
         sd = snap.get("sd", "--")
         lwd_running = snap.get("lwd_running", False)
+        arti_running = snap.get("arti_running", False)
 
         # Title-bar + Zebra dots
         if running and not has_internet:
@@ -2709,6 +2885,13 @@ class DashboardWindow(QMainWindow):
         self.zebra_toggle.setChecked(running)
         self.restart_btn.setVisible(running)
         self.lwd_toggle.setChecked(lwd_running)
+
+        # Arti / Tor — toggle reflects the saved intent; show .onion if it was live
+        self.arti_toggle.setChecked(self.config.get("arti_enabled", False))
+        self.arti_status_dot.set_state(
+            StatusDot.STATE_RUNNING if arti_running else StatusDot.STATE_STOPPED
+        )
+        self._show_onion(self.config.get("arti_onion_address", "") if arti_running else "")
 
         # Stats footer
         self.peers_card.set_value(str(peer_count) if running else "--")
@@ -3185,6 +3368,72 @@ class DashboardWindow(QMainWindow):
                 self.config.set("lightwalletd_enabled", False)
 
             self._run_in_thread(stop_lwd, on_stop_done)
+
+    def _copy_onion(self):
+        onion = self.config.get("arti_onion_address", "")
+        if onion:
+            QApplication.clipboard().setText(onion)
+            self.arti_copy_btn.setText("Copied!")
+            QTimer.singleShot(1500, lambda: self.arti_copy_btn.setText("Copy")
+                              if not self._closing else None)
+
+    def _toggle_arti_from_toggle(self, checked):
+        self._toggle_arti(checked)
+
+    def _toggle_arti(self, checked=None):
+        if checked is None:
+            checked = self.arti_toggle.isChecked()
+        if checked:
+            self._arti_action_in_progress = True
+            self.arti_toggle.setEnabled(False)
+            self.config.set("arti_enabled", True)
+            self.arti_status.setText("Starting Tor...")
+            self.arti_status.setStyleSheet(f"color: {C['accent']}; font-size: 11px; background: transparent; border: none;")
+
+            def start_arti():
+                ok, msg = self.node_manager.start_arti()
+                onion = self.node_manager.get_onion_address() if ok else None
+                return ok, msg, onion
+
+            def on_start_done(result):
+                self._arti_action_in_progress = False
+                if self._closing:
+                    return
+                ok, msg, onion = result
+                if ok:
+                    self.arti_status_dot.set_state(StatusDot.STATE_RUNNING)
+                    self.arti_status.setText("Live on Tor")
+                    self.arti_status.setStyleSheet(f"color: {C['success']}; font-size: 11px; background: transparent; border: none;")
+                    if onion:
+                        self.config.set("arti_onion_address", onion)
+                        self._show_onion(onion)
+                else:
+                    self.arti_status.setText(f"Error: {msg}")
+                    self.arti_status.setStyleSheet(f"color: {C['error']}; font-size: 11px; background: transparent; border: none;")
+                self.arti_toggle.setEnabled(True)
+
+            self._run_in_thread(start_arti, on_start_done)
+        else:
+            self._arti_action_in_progress = True
+            self.arti_toggle.setEnabled(False)
+            self.config.set("arti_enabled", False)
+            self.arti_status.setText("Stopping...")
+            self.arti_status.setStyleSheet(f"color: {C['accent']}; font-size: 11px; background: transparent; border: none;")
+
+            def stop_arti():
+                self.node_manager.stop_arti()
+                return True
+
+            def on_stop_done(result):
+                self._arti_action_in_progress = False
+                if self._closing:
+                    return
+                self.arti_toggle.setEnabled(True)
+                self.arti_status.setText("")
+                self.arti_status_dot.set_state(StatusDot.STATE_STOPPED)
+                self._show_onion("")
+
+            self._run_in_thread(stop_arti, on_stop_done)
 
     # ── Utilities ─────────────────────────────────────────
 

@@ -103,6 +103,21 @@ def get_status():
 
     lwd_url = node_manager.get_lightwalletd_url() if lwd_running else None
 
+    # Arti / Tor onion service (opt-in). start_arti can take ~15s waiting for
+    # lightwalletd's IP, so auto-start and onion lookup run in the background.
+    arti_running = node_manager.is_arti_running()
+    arti_enabled = config.get("arti_enabled", False)
+    if arti_enabled and status.running and not arti_running:
+        threading.Thread(target=_start_arti_bg, daemon=True).start()
+
+    onion = config.get("arti_onion_address", "") or None
+    if arti_running and not onion:
+        def _fetch_onion():
+            addr = node_manager.get_onion_address()
+            if addr:
+                config.set("arti_onion_address", addr)
+        threading.Thread(target=_fetch_onion, daemon=True).start()
+
     return jsonify({
         "running": status.running,
         "sync_percent": sync_pct,
@@ -116,6 +131,11 @@ def get_status():
         "lightwalletd": {
             "running": lwd_running,
             "url": lwd_url
+        },
+        "arti": {
+            "running": arti_running,
+            "enabled": arti_enabled,
+            "onion": onion
         },
         "zecnode_version": VERSION
     })
@@ -237,6 +257,74 @@ def toggle_lightwalletd():
             "message": message,
             "running": success,
             "url": node_manager.get_lightwalletd_url() if success else None
+        })
+
+
+# ==================== ARTI / TOR ====================
+
+_arti_start_lock = threading.Lock()
+
+
+def _start_arti_bg():
+    """Start Arti in the background and cache the resulting .onion address.
+    Guarded so overlapping status polls can't race on `docker run`."""
+    if not _arti_start_lock.acquire(blocking=False):
+        return
+    try:
+        ok, _ = node_manager.start_arti()
+        if ok:
+            addr = node_manager.get_onion_address()
+            if addr:
+                config.set("arti_onion_address", addr)
+    finally:
+        _arti_start_lock.release()
+
+
+@app.route('/api/arti/start', methods=['POST'])
+def start_arti():
+    """Enable + start the Tor onion service (auto-starts the chain)."""
+    config.set("arti_enabled", True)
+    threading.Thread(target=_start_arti_bg, daemon=True).start()
+    return jsonify({
+        "success": True,
+        "message": "Starting Arti...",
+        "running": True
+    })
+
+
+@app.route('/api/arti/stop', methods=['POST'])
+def stop_arti():
+    """Disable + stop the Tor onion service."""
+    success, message = node_manager.stop_arti()
+    if success:
+        config.set("arti_enabled", False)
+    return jsonify({
+        "success": success,
+        "message": message,
+        "running": False
+    })
+
+
+@app.route('/api/arti/toggle', methods=['POST'])
+def toggle_arti():
+    """Toggle the Tor onion service on/off."""
+    if node_manager.is_arti_running():
+        success, message = node_manager.stop_arti()
+        if success:
+            config.set("arti_enabled", False)
+        return jsonify({
+            "success": success,
+            "message": message,
+            "running": False
+        })
+    else:
+        config.set("arti_enabled", True)
+        threading.Thread(target=_start_arti_bg, daemon=True).start()
+        return jsonify({
+            "success": True,
+            "message": "Starting Arti...",
+            "running": True,
+            "onion": config.get("arti_onion_address", "") or None
         })
 
 

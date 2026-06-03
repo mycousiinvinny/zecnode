@@ -8,7 +8,7 @@ echo "  - ZecNode app code      (~/zecnode)"
 echo "  - ZecNode config        (~/.zecnode)"
 echo "  - Desktop menu entries  (~/.local/share/applications/zecnode.desktop)"
 echo "  - Autostart entry       (~/.config/autostart/zecnode-nosleep.desktop)"
-echo "  - Docker containers     (zebra, lightwalletd)"
+echo "  - Docker containers     (zebra, lightwalletd, arti)"
 echo "  - Docker network        (zecnode)"
 echo ""
 echo "Your blockchain data at /mnt/zebra-data is PRESERVED."
@@ -33,8 +33,8 @@ sleep 1
 # Tear down Docker containers + network
 if command -v docker &> /dev/null; then
     echo "Stopping Docker containers..."
-    sudo docker stop zebra lightwalletd 2>/dev/null || true
-    sudo docker rm -f zebra lightwalletd 2>/dev/null || true
+    sudo docker stop zebra lightwalletd arti 2>/dev/null || true
+    sudo docker rm -f zebra lightwalletd arti 2>/dev/null || true
     sudo docker network rm zecnode 2>/dev/null || true
 else
     echo "Docker not installed — skipping container cleanup."

@@ -38,6 +38,8 @@ class Config:
         "autostart": False,
         "zebra_version": "latest",
         "lightwalletd_enabled": False,
+        "arti_enabled": False,          # Tor onion-service (opt-in privacy)
+        "arti_onion_address": "",       # cached .onion for instant display
     }
     
     def __init__(self):
