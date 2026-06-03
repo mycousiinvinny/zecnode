@@ -55,6 +55,7 @@ curl -sSL -o "$PROJECT_DIR/config.py" "$GITHUB_RAW/config.py"
 curl -sSL -o "$PROJECT_DIR/node_manager.py" "$GITHUB_RAW/node_manager.py"
 curl -sSL -o "$PROJECT_DIR/installer.py" "$GITHUB_RAW/installer.py"
 curl -sSL -o "$PROJECT_DIR/dashboard.py" "$GITHUB_RAW/dashboard.py"
+curl -sSL -o "$PROJECT_DIR/splash.py" "$GITHUB_RAW/splash.py"
 
 # Download icon
 curl -sSL -o "$PROJECT_DIR/zecnode-icon.png" "$GITHUB_RAW/zecnode-icon.png" 2>/dev/null || true
