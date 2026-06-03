@@ -57,7 +57,7 @@ A `.onion` can only be reached *through* Tor, so the wallet needs a Tor path:
 
 1. Install **Orbot** (the Tor app) on the phone and turn on its VPN mode — or use a wallet that has Tor built in.
 2. In the wallet's server settings, point lightwalletd at your address:
-   `http://<your-node>.onion:9067`
+   `http://<your-node>.onion:443`
    Use `http`, not `https` — Tor already encrypts the connection end-to-end, so no TLS is needed.
 3. Sync. The wallet now talks to your node entirely over Tor.
 

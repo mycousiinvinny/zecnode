@@ -2603,9 +2603,9 @@ class DashboardWindow(QMainWindow):
         return ok, onion
 
     def _show_onion(self, onion):
-        """Show or hide the .onion address row."""
+        """Show or hide the .onion address row (shown as <onion>:443)."""
         if onion:
-            self.arti_onion_label.setText(onion)
+            self.arti_onion_label.setText(f"{onion}:443")
             self.arti_onion_row.setVisible(True)
         else:
             self.arti_onion_row.setVisible(False)
@@ -3375,7 +3375,7 @@ class DashboardWindow(QMainWindow):
     def _copy_onion(self):
         onion = self.config.get("arti_onion_address", "")
         if onion:
-            QApplication.clipboard().setText(onion)
+            QApplication.clipboard().setText(f"{onion}:443")
             self.arti_copy_btn.setText("Copied!")
             QTimer.singleShot(1500, lambda: self.arti_copy_btn.setText("Copy")
                               if not self._closing else None)

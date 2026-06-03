@@ -770,7 +770,7 @@
                 if (data.arti) {
                     if (data.arti.running && data.arti.onion) {
                         artiToggle.classList.add('active');
-                        artiOnion.innerHTML = `${data.arti.onion}:9067<span class="copy-hint">tap to copy</span>`;
+                        artiOnion.innerHTML = `${data.arti.onion}:443<span class="copy-hint">tap to copy</span>`;
                     } else if (data.arti.enabled) {
                         artiToggle.classList.add('active');
                         artiOnion.innerHTML = `Starts when synced<span class="copy-hint"></span>`;
@@ -1017,7 +1017,7 @@
         // Copy .onion to clipboard
         document.getElementById('artiOnion').addEventListener('click', function() {
             const txt = this.textContent.replace('tap to copy', '').trim();
-            if (txt && txt.endsWith(':9067')) {
+            if (txt && txt.endsWith(':443')) {
                 navigator.clipboard.writeText(txt).then(() => {
                     showToast('Copied to clipboard!');
                 }).catch(() => {

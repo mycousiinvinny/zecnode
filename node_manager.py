@@ -1436,7 +1436,7 @@ gsettings set org.gnome.desktop.session idle-delay 0 2>/dev/null || true
             f'[onion_services."{self.ARTI_NICKNAME}"]\n'
             "enabled = true\n"
             "proxy_ports = [\n"
-            f'    ["9067", "{lwd_ip}:9067"],\n'
+            f'    ["443", "{lwd_ip}:9067"],\n'
             "]\n"
         )
         return conf_file
