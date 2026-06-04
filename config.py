@@ -10,7 +10,7 @@ import time
 from pathlib import Path
 from typing import Optional
 
-VERSION = "3.1.2"
+VERSION = "3.1.3"
 
 
 class Config:
