@@ -67,22 +67,28 @@ class SmoothProgressBar(QWidget):
                 self._target = self._value + 0.05
     
     def paintEvent(self, event):
-        painter = QPainter(self)
-        painter.setRenderHint(QPainter.Antialiasing)
-        
-        # Background
-        bg_path = QPainterPath()
-        bg_path.addRoundedRect(QRectF(0, 0, self.width(), self.height()), 4, 4)
-        painter.fillPath(bg_path, QColor("#333"))
-        
-        # Progress fill
-        if self._value > 0:
-            fill_width = (self._value / 100.0) * self.width()
-            fill_path = QPainterPath()
-            fill_path.addRoundedRect(QRectF(0, 0, fill_width, self.height()), 4, 4)
-            painter.fillPath(fill_path, QColor("#f7931a"))
-        
-        painter.end()
+        # Use begin()/return so we never call end() on an inactive painter
+        # (the widget can briefly be unpaintable mid-animation, which otherwise
+        # spams "QPainter::end: Painter not active, aborted" at 60fps).
+        painter = QPainter()
+        if not painter.begin(self):
+            return
+        try:
+            painter.setRenderHint(QPainter.Antialiasing)
+
+            # Background
+            bg_path = QPainterPath()
+            bg_path.addRoundedRect(QRectF(0, 0, self.width(), self.height()), 4, 4)
+            painter.fillPath(bg_path, QColor("#333"))
+
+            # Progress fill
+            if self._value > 0:
+                fill_width = (self._value / 100.0) * self.width()
+                fill_path = QPainterPath()
+                fill_path.addRoundedRect(QRectF(0, 0, fill_width, self.height()), 4, 4)
+                painter.fillPath(fill_path, QColor("#f7931a"))
+        finally:
+            painter.end()
 
 
 class PreRebootWorker(QThread):
