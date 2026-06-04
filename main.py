@@ -8,7 +8,7 @@ import sys
 import os
 import subprocess
 from PyQt5.QtWidgets import QApplication
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, qInstallMessageHandler
 from PyQt5.QtGui import QFont
 
 from config import Config
@@ -223,6 +223,15 @@ QMenu::item:selected {
 
 
 def main():
+    # Silence the harmless, noisy "QPainter::end: Painter not active" warnings
+    # that animated custom widgets emit at 60fps when a frame can't paint. They
+    # don't affect rendering — just drown the terminal. Everything else passes.
+    def _qt_msg_filter(mode, context, message):
+        if "QPainter::" in message or "Painter not active" in message:
+            return
+        sys.stderr.write(message + "\n")
+    qInstallMessageHandler(_qt_msg_filter)
+
     # Kill any existing ZecNode instances (but not ourselves)
     my_pid = os.getpid()
     subprocess.run(
