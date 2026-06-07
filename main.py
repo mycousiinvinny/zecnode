@@ -383,7 +383,9 @@ def main():
                                             )
                                             uuid = uuid_result.stdout.strip()
                                             if uuid:
-                                                fstab_line = f"UUID={uuid} {data_path} ext4 defaults 0 2\n"
+                                                # nofail + short device-timeout: a missing/disconnected SSD must
+                                                # never drop the Pi into emergency mode at boot (it just skips the mount).
+                                                fstab_line = f"UUID={uuid} {data_path} ext4 defaults,nofail,x-systemd.device-timeout=10s 0 2\n"
                                                 # Check if already in fstab
                                                 with open("/etc/fstab", "r") as f:
                                                     if uuid not in f.read():

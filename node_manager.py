@@ -741,7 +741,7 @@ gsettings set org.gnome.desktop.session idle-delay 0 2>/dev/null || true
             )
             
             # Add new fstab entry with current UUID
-            fstab_entry = f"UUID={uuid} {self.MOUNT_PATH} ext4 defaults,nofail 0 2"
+            fstab_entry = f"UUID={uuid} {self.MOUNT_PATH} ext4 defaults,nofail,x-systemd.device-timeout=10s 0 2"
             subprocess.run(
                 ["sudo", "bash", "-c", f'echo "{fstab_entry}" >> /etc/fstab'],
                 capture_output=True
