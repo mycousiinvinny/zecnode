@@ -1002,28 +1002,51 @@
             toggleArti();
         });
 
+        // Clipboard copy that also works over plain http on mobile.
+        // navigator.clipboard needs a secure context (https/localhost), which the
+        // LAN dashboard isn't — so fall back to execCommand, which works over http.
+        function copyText(text) {
+            if (navigator.clipboard && window.isSecureContext) {
+                navigator.clipboard.writeText(text)
+                    .then(() => showToast('Copied to clipboard!'))
+                    .catch(() => fallbackCopy(text));
+            } else {
+                fallbackCopy(text);
+            }
+        }
+        function fallbackCopy(text) {
+            const ta = document.createElement('textarea');
+            ta.value = text;
+            ta.contentEditable = true;
+            ta.readOnly = false;
+            ta.style.position = 'fixed';
+            ta.style.top = '-1000px';
+            ta.style.opacity = '0';
+            document.body.appendChild(ta);
+            // iOS-friendly selection (plain .select() doesn't take on Safari).
+            const range = document.createRange();
+            range.selectNodeContents(ta);
+            const sel = window.getSelection();
+            sel.removeAllRanges();
+            sel.addRange(range);
+            ta.setSelectionRange(0, text.length);
+            let ok = false;
+            try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+            sel.removeAllRanges();
+            document.body.removeChild(ta);
+            showToast(ok ? 'Copied to clipboard!' : 'Failed to copy');
+        }
+
         // Copy URL to clipboard
         document.getElementById('lwdUrl').addEventListener('click', function() {
             const url = this.textContent.replace('tap to copy', '').trim();
-            if (url && url !== 'Not running') {
-                navigator.clipboard.writeText(url).then(() => {
-                    showToast('Copied to clipboard!');
-                }).catch(() => {
-                    showToast('Failed to copy');
-                });
-            }
+            if (url && url !== 'Not running') copyText(url);
         });
 
         // Copy .onion to clipboard
         document.getElementById('artiOnion').addEventListener('click', function() {
             const txt = this.textContent.replace('tap to copy', '').trim();
-            if (txt && txt.endsWith(':443')) {
-                navigator.clipboard.writeText(txt).then(() => {
-                    showToast('Copied to clipboard!');
-                }).catch(() => {
-                    showToast('Failed to copy');
-                });
-            }
+            if (txt && txt.endsWith(':443')) copyText(txt);
         });
 
         // Toast notification
