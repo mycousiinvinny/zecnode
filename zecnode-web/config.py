@@ -8,7 +8,7 @@ import json
 from pathlib import Path
 from typing import Optional
 
-VERSION = "3.1.3"
+VERSION = "3.1.4"
 
 
 class Config:

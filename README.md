@@ -43,6 +43,8 @@ Running a node on your main computer kind of sucks. It eats up resources, needs 
 - Formats and mounts your SSD
 - Shows sync progress, peer count, disk usage
 - Runs in the system tray
+- **Web dashboard** for headless setups — manage and monitor your node from any browser on your network
+- Notifies you when a new version is available, and updates in one click
 - Restarts automatically after reboots or power outages
 - Built-in **Learn** tab explaining the tech behind Zcash in plain English
 - Optional **Tor** support — share your node over a private `.onion` address
@@ -60,6 +62,8 @@ A `.onion` can only be reached *through* Tor, so the wallet needs a Tor path:
    `http://<your-node>.onion:443`
    Use `http`, not `https` — Tor already encrypts the connection end-to-end, so no TLS is needed.
 3. Sync. The wallet now talks to your node entirely over Tor.
+
+> **Tip:** On the desktop dashboard, click **QR** next to your `.onion` to scan the address straight into your phone — no typing 56 characters.
 
 Your normal (clearnet) wallet access keeps working unchanged — Tor is just an extra private door.
 
