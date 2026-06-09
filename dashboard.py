@@ -1587,6 +1587,19 @@ class DashboardWindow(QMainWindow):
         self.arti_copy_btn.clicked.connect(self._copy_onion)
         aor.addWidget(self.arti_copy_btn)
 
+        self.arti_qr_btn = QPushButton("QR")
+        self.arti_qr_btn.setCursor(Qt.PointingHandCursor)
+        self.arti_qr_btn.setStyleSheet(f"""
+            QPushButton {{
+                background: transparent; color: {C['accent']};
+                border: 1px solid {C['accent']}; border-radius: 6px;
+                padding: 4px 14px; min-width: 0px; font-size: 11px; font-weight: 600;
+            }}
+            QPushButton:hover {{ background: {C['surface_hover']}; }}
+        """)
+        self.arti_qr_btn.clicked.connect(self._show_onion_qr)
+        aor.addWidget(self.arti_qr_btn)
+
         self.arti_onion_row.setVisible(False)
         layout.addWidget(self.arti_onion_row)
 
@@ -3401,6 +3414,88 @@ class DashboardWindow(QMainWindow):
             self.arti_copy_btn.setText("Copied!")
             QTimer.singleShot(1500, lambda: self.arti_copy_btn.setText("Copy")
                               if not self._closing else None)
+
+    def _show_onion_qr(self):
+        """Pop up a scannable QR of THIS node's own .onion address (read live
+        from config), so a phone wallet can grab the long string without typing."""
+        import subprocess
+        onion = self.config.get("arti_onion_address", "")
+        if not onion:
+            return
+        data = f"{onion}:443"
+
+        # Render with the system 'qrencode' tool — no bundled third-party code.
+        png = None
+        try:
+            result = subprocess.run(
+                ["qrencode", "-o", "-", "-t", "PNG", "-s", "8", "-m", "2", data],
+                capture_output=True, timeout=10
+            )
+            if result.returncode == 0 and result.stdout:
+                png = result.stdout
+        except (FileNotFoundError, subprocess.TimeoutExpired):
+            png = None
+
+        dlg = QDialog(self)
+        # Frameless to match the app's other dialogs (no native title-bar buttons);
+        # the Close button below is the single way out.
+        dlg.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
+        dlg.setModal(True)
+        dlg.setStyleSheet(f"QDialog {{ background-color: {C['surface']}; "
+                          f"border: 1px solid {C['accent']}; }}")
+        v = QVBoxLayout(dlg)
+        v.setContentsMargins(24, 24, 24, 24)
+        v.setSpacing(14)
+
+        title = QLabel("Scan with your phone")
+        title.setFont(QFont("Segoe UI", 13, QFont.Bold))
+        title.setStyleSheet(f"color: {C['text']}; background: transparent;")
+        title.setAlignment(Qt.AlignCenter)
+        v.addWidget(title)
+
+        if png:
+            pm = QPixmap()
+            pm.loadFromData(png)
+            qr_label = QLabel()
+            qr_label.setPixmap(pm)
+            qr_label.setAlignment(Qt.AlignCenter)
+            # White card behind the QR so it scans on the dark theme.
+            qr_label.setStyleSheet("background: white; border-radius: 8px; padding: 12px;")
+            v.addWidget(qr_label, 0, Qt.AlignCenter)
+
+            addr = QLabel(data)
+            addr.setTextInteractionFlags(Qt.TextSelectableByMouse)
+            addr.setWordWrap(True)
+            addr.setAlignment(Qt.AlignCenter)
+            addr.setStyleSheet(f"color: {C['text_sec']}; font-size: 11px; "
+                               f"font-family: monospace; background: transparent;")
+            v.addWidget(addr)
+
+            hint = QLabel("Scan, then paste into your wallet's custom-server field.")
+            hint.setWordWrap(True)
+            hint.setAlignment(Qt.AlignCenter)
+            hint.setStyleSheet(f"color: {C['text_muted']}; font-size: 11px; background: transparent;")
+            v.addWidget(hint)
+        else:
+            msg = QLabel("QR generator isn't installed.\n\nInstall it once with:\n"
+                         "sudo apt install qrencode")
+            msg.setWordWrap(True)
+            msg.setAlignment(Qt.AlignCenter)
+            msg.setStyleSheet(f"color: {C['text_sec']}; font-size: 12px; background: transparent;")
+            v.addWidget(msg)
+
+        close_btn = QPushButton("Close")
+        close_btn.setCursor(Qt.PointingHandCursor)
+        close_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {C['accent']}; color: #1a1a1a;
+                border: none; border-radius: 6px; padding: 8px 20px; font-weight: 600;
+            }}
+        """)
+        close_btn.clicked.connect(dlg.accept)
+        v.addWidget(close_btn, 0, Qt.AlignCenter)
+
+        dlg.exec_()
 
     def _toggle_arti_from_toggle(self, checked):
         self._toggle_arti(checked)

@@ -91,6 +91,12 @@ if ! python3 -c "import PyQt5" 2>/dev/null; then
     fi
 fi
 
+# qrencode powers the .onion QR code in the dashboard (optional — non-fatal if it fails)
+if command -v apt &> /dev/null && ! command -v qrencode &> /dev/null; then
+    echo "Installing qrencode (for .onion QR codes)..."
+    sudo apt install -y qrencode > /dev/null 2>&1 || true
+fi
+
 echo ""
 echo "Launching ZecNode..."
 python3 main.py
