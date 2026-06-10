@@ -75,6 +75,20 @@ Your normal (clearnet) wallet access keeps working unchanged — Tor is just an 
 
 More nodes = more decentralization = stronger network. That's it.
 
+## Start the node over from scratch
+
+If your node ever gets stuck or corrupt and you just want a clean re-sync, you can delete the blockchain and let it re-download. Your ZecNode install and SSD setup stay intact — only the (re-downloadable) chain data is removed.
+
+```bash
+# Stop and remove the node containers (lightwalletd/arti may not exist — that's fine)
+docker rm -f zebra lightwalletd arti 2>/dev/null
+
+# Delete the blockchain data so it re-syncs from scratch
+sudo rm -rf /mnt/zebra-data/zebra-cache/* /mnt/zebra-data/zebra-state/* /mnt/zebra-data/lightwalletd/*
+```
+
+Then reopen ZecNode — it rebuilds the containers and starts syncing again. A full re-sync takes a while (the chain is large), so only do this if the node is actually broken.
+
 ## Uninstall
 
 If you ever need to uninstall, run:
