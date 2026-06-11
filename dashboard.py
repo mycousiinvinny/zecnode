@@ -2737,11 +2737,14 @@ class DashboardWindow(QMainWindow):
         if self._arti_action_in_progress:
             return
 
-        # Toggle reflects intent (enabled), so it stays on while waiting for sync.
-        self.arti_toggle.setChecked(arti_enabled)
-        self.arti_toggle.setEnabled(True)
+        # Toggle reflects ACTUAL running state and is gated on sync — same as
+        # lightwalletd — so a restart shows it ON when Arti is live, and it can't
+        # be flipped on before the node is synced.
+        is_synced = zebra_status.running and zebra_status.sync_percent >= 99.9
 
         if arti_running:
+            self.arti_toggle.setChecked(True)
+            self.arti_toggle.setEnabled(True)
             self.arti_status_dot.set_state(StatusDot.STATE_RUNNING)
             self.arti_status.setText("Live on Tor")
             self.arti_status.setStyleSheet(f"color: {C['success']}; font-size: 11px; background: transparent; border: none;")
@@ -2764,13 +2767,25 @@ class DashboardWindow(QMainWindow):
                     lambda: self.node_manager.get_onion_address(),
                     _onion_fetched
                 )
-        elif arti_enabled:
-            # Enabled but waiting on the chain / sync
+        elif not zebra_status.running:
+            self.arti_toggle.setChecked(False)
+            self.arti_toggle.setEnabled(False)
+            self.arti_status_dot.set_state(StatusDot.STATE_STOPPED)
+            self.arti_status.setText("Node stopped")
+            self.arti_status.setStyleSheet(f"color: {C['error']}; font-size: 11px; background: transparent; border: none;")
+            self._show_onion("")
+        elif not is_synced:
+            # Syncing — Tor can't start yet, so the toggle is disabled (matches lightwalletd).
+            self.arti_toggle.setChecked(False)
+            self.arti_toggle.setEnabled(False)
             self.arti_status_dot.set_state(StatusDot.STATE_STOPPED)
             self.arti_status.setText("Starts when synced")
             self.arti_status.setStyleSheet(f"color: {C['text_sec']}; font-size: 11px; background: transparent; border: none;")
             self._show_onion("")
         else:
+            # Synced but Arti not running — toggle is available to flip on.
+            self.arti_toggle.setChecked(False)
+            self.arti_toggle.setEnabled(True)
             self.arti_status_dot.set_state(StatusDot.STATE_STOPPED)
             self.arti_status.setText("")
             self._show_onion("")
@@ -3074,8 +3089,9 @@ class DashboardWindow(QMainWindow):
         self.restart_btn.setVisible(running)
         self.lwd_toggle.setChecked(lwd_running)
 
-        # Arti / Tor — toggle reflects the saved intent; show .onion if it was live
-        self.arti_toggle.setChecked(self.config.get("arti_enabled", False))
+        # Arti / Tor — toggle reflects ACTUAL running state (like lightwalletd), so a
+        # restart shows it ON when Arti is live; show .onion if it was live.
+        self.arti_toggle.setChecked(arti_running)
         self.arti_status_dot.set_state(
             StatusDot.STATE_RUNNING if arti_running else StatusDot.STATE_STOPPED
         )
