@@ -1397,15 +1397,18 @@ class DashboardWindow(QMainWindow):
         h_layout.setSpacing(10)
         h_layout.setAlignment(Qt.AlignCenter)
 
-        self.sync_percent_label = QLabel("0.0%")
+        # Starts as a loading placeholder; replaced by the cached snapshot (instant
+        # restart) or the first real status refresh, whichever paints first. Avoids
+        # a brief flash of "0.0% / Block 0" that looks like a stopped node.
+        self.sync_percent_label = QLabel("Loading…")
         self.sync_percent_label.setAlignment(Qt.AlignCenter)
         self.sync_percent_label.setFont(QFont("Segoe UI", 52, QFont.Bold))
         self.sync_percent_label.setStyleSheet(
-            f"color: {C['text']}; background: transparent; border: none;"
+            f"color: {C['text_sec']}; background: transparent; border: none;"
         )
         h_layout.addWidget(self.sync_percent_label)
 
-        self.sync_height_label = QLabel("Block 0")
+        self.sync_height_label = QLabel("Loading node information…")
         self.sync_height_label.setAlignment(Qt.AlignCenter)
         self.sync_height_label.setStyleSheet(
             f"color: {C['text_muted']}; font-size: 13px; background: transparent; border: none;"
@@ -2487,8 +2490,9 @@ class DashboardWindow(QMainWindow):
     def _start_refresh(self):
         if self._closing:
             return
-        if not self.isVisible():
-            return
+        # Note: intentionally NOT gated on isVisible() — ZecNode runs minimized to the
+        # tray, and pausing refreshes there froze the status snapshot (stale data on
+        # reopen) and the tray icon. get_status is cheap, so keep refreshing while hidden.
         if self._action_in_progress:
             return
         try:
@@ -3055,6 +3059,15 @@ class DashboardWindow(QMainWindow):
             return
 
         running = snap.get("running", False)
+
+        # A cached "stopped" snapshot is treated as unknown, not painted. The node
+        # normally keeps running while the app is closed, so a stopped snapshot is
+        # usually just stale — painting it would flash a wrong "0% / stopped" state.
+        # Keep the "Loading…" placeholder and let the first live refresh paint the
+        # truth (a few seconds). A running snapshot is safe to restore instantly.
+        if not running:
+            return
+
         has_internet = snap.get("has_internet", True)
         peer_count = snap.get("peer_count", 0)
         uptime = snap.get("uptime", "--:--:--")
