@@ -83,6 +83,10 @@ class NodeManager:
     def check_docker_installed(self) -> bool:
         """Check if Docker is installed"""
         return shutil.which("docker") is not None
+
+    def check_qrencode_installed(self) -> bool:
+        """Check if qrencode is installed (powers the .onion QR code)"""
+        return shutil.which("qrencode") is not None
     
     def check_docker_running(self) -> bool:
         """Check if Docker daemon is running"""
@@ -261,62 +265,60 @@ class NodeManager:
     
     def update_system(self, progress_callback=None) -> Tuple[bool, str]:
         """
-        Step:
-            sudo apt update
-            sudo apt upgrade -y
-        Note: Reboot happens separately after this + Docker install
+        Refresh the apt package index only — NO `apt upgrade`.
+
+        We deliberately don't upgrade the user's installed packages: it's slow,
+        it can prompt (and hang), and it's not our place to change software the
+        user didn't ask us to touch. We just need a current index so the curl /
+        Docker / qrencode installs below can find their packages.
         """
         if progress_callback:
             progress_callback("Disabling sleep mode...")
-        
+
         # Disable sleep/suspend so node stays online 24/7
         self._disable_sleep_mode()
-        
+
         if progress_callback:
-            progress_callback("Updating package lists...")
-        
+            progress_callback("Refreshing package list...")
+
+        # `sudo env VAR=...` sets the vars inside the root process (survives sudo's
+        # env_reset) so apt never pops an interactive prompt; stdin=DEVNULL is a
+        # second guard. apt-get is the script-stable CLI.
+        apt = ["sudo", "env",
+               "DEBIAN_FRONTEND=noninteractive",
+               "NEEDRESTART_MODE=a",
+               "NEEDRESTART_SUSPEND=1"]
+
+        def run_apt(args, timeout):
+            return subprocess.run(
+                apt + args,
+                capture_output=True, text=True,
+                stdin=subprocess.DEVNULL, timeout=timeout
+            )
+
         try:
-            # apt update
-            result = subprocess.run(
-                ["sudo", "apt", "update", "--fix-missing"],
-                capture_output=True,
-                text=True,
-                timeout=300  # 5 min timeout
-            )
-            
+            result = run_apt(["apt-get", "update", "--fix-missing"], 600)
+
             if result.returncode != 0:
-                return False, f"apt update failed: {result.stderr}"
-            
-            if progress_callback:
-                progress_callback("Upgrading system packages (this may take a while)...")
-            
-            # apt upgrade -y with fix-missing
-            result = subprocess.run(
-                ["sudo", "apt", "upgrade", "-y", "--fix-missing"],
-                capture_output=True,
-                text=True,
-                timeout=1800  # 30 min timeout for upgrades
-            )
-            
-            # If upgrade fails, try just continuing - not critical
-            if result.returncode != 0:
-                # Try apt-get instead which handles errors better
-                result = subprocess.run(
-                    ["sudo", "apt-get", "upgrade", "-y", "--fix-missing", "-o", "Dpkg::Options::=--force-confdef"],
-                    capture_output=True,
-                    text=True,
-                    timeout=1800
-                )
+                err = result.stderr or ""
+                # Another package manager holding the dpkg/apt lock? Wait and retry once.
+                if "lock" in err.lower() or "another process" in err.lower():
+                    if progress_callback:
+                        progress_callback("Waiting for another update to finish...")
+                    time.sleep(15)
+                    result = run_apt(["apt-get", "update", "--fix-missing"], 600)
                 if result.returncode != 0:
-                    # Still continue - upgrade isn't critical for Docker install
-                    pass
-            
-            return True, "System updated"
-            
+                    return False, ("Couldn't refresh the package list. Check your internet "
+                                   "connection and try again.\n\n"
+                                   f"{(result.stderr or '').strip()[:300]}")
+
+            return True, "Package list refreshed"
+
         except subprocess.TimeoutExpired:
-            return False, "System update timed out"
+            return False, ("Refreshing the package list timed out — this is usually a slow "
+                           "network. Check your connection and try again.")
         except Exception as e:
-            return False, f"System update error: {str(e)}"
+            return False, f"Package refresh error: {str(e)}"
     
     def _disable_sleep_mode(self):
         """Disable sleep/suspend/hibernate so node runs 24/7"""
@@ -428,12 +430,14 @@ gsettings set org.gnome.desktop.session idle-delay 0 2>/dev/null || true
         
         try:
             result = subprocess.run(
-                ["sudo", "apt", "install", "-y", "curl"],
+                ["sudo", "env", "DEBIAN_FRONTEND=noninteractive", "NEEDRESTART_MODE=a",
+                 "apt", "install", "-y", "curl"],
                 capture_output=True,
                 text=True,
+                stdin=subprocess.DEVNULL,
                 timeout=120
             )
-            
+
             if result.returncode != 0:
                 return False, f"Failed to install curl: {result.stderr}"
             
@@ -443,7 +447,35 @@ gsettings set org.gnome.desktop.session idle-delay 0 2>/dev/null || true
             return False, "curl installation timed out"
         except Exception as e:
             return False, f"curl installation error: {str(e)}"
-    
+
+    def install_qrencode(self, progress_callback=None) -> Tuple[bool, str]:
+        """Install qrencode (powers the dashboard's .onion QR code).
+
+        Optional convenience tool — callers should treat a failure as non-fatal.
+        """
+        if progress_callback:
+            progress_callback("Installing qrencode...")
+
+        try:
+            result = subprocess.run(
+                ["sudo", "env", "DEBIAN_FRONTEND=noninteractive", "NEEDRESTART_MODE=a",
+                 "apt", "install", "-y", "qrencode"],
+                capture_output=True,
+                text=True,
+                stdin=subprocess.DEVNULL,
+                timeout=120
+            )
+
+            if result.returncode != 0:
+                return False, f"Failed to install qrencode: {result.stderr}"
+
+            return True, "qrencode installed"
+
+        except subprocess.TimeoutExpired:
+            return False, "qrencode installation timed out"
+        except Exception as e:
+            return False, f"qrencode installation error: {str(e)}"
+
     def install_docker(self, progress_callback=None) -> Tuple[bool, str]:
         """
         Step:
@@ -477,11 +509,15 @@ gsettings set org.gnome.desktop.session idle-delay 0 2>/dev/null || true
             if progress_callback:
                 progress_callback("Installing Docker (this takes a few minutes)...")
             
-            # Run Docker install script
+            # Run Docker install script. get.docker.com runs apt-get internally, so
+            # the same non-interactive env applies — otherwise a needrestart prompt
+            # mid-script would hang until the timeout.
             result = subprocess.run(
-                ["sudo", "sh", "/tmp/get-docker.sh"],
+                ["sudo", "env", "DEBIAN_FRONTEND=noninteractive", "NEEDRESTART_MODE=a",
+                 "NEEDRESTART_SUSPEND=1", "sh", "/tmp/get-docker.sh"],
                 capture_output=True,
                 text=True,
+                stdin=subprocess.DEVNULL,
                 timeout=600  # 10 minute timeout
             )
             

@@ -97,29 +97,40 @@ class PreRebootWorker(QThread):
     step_complete = pyqtSignal(int, bool, str)
     finished = pyqtSignal(bool, str)
     
-    def __init__(self, node_manager: NodeManager, needs_update: bool, needs_docker: bool):
+    def __init__(self, node_manager: NodeManager, needs_docker: bool):
         super().__init__()
         self.node_manager = node_manager
-        self.needs_update = needs_update
         self.needs_docker = needs_docker
         self._cancelled = False
     
     def run(self):
         try:
-            if self.needs_update:
-                self.progress.emit("Updating system packages...")
-                success, msg = self.node_manager.update_system(self.progress.emit)
+            # Quick package-index refresh (NO system upgrade) so the installs below
+            # find current packages. Best-effort: not its own checklist row, and a
+            # failure isn't necessarily fatal (the Docker script does its own update),
+            # but surface it if it clearly couldn't reach the mirrors.
+            self.progress.emit("Refreshing package list...")
+            self.node_manager.update_system(self.progress.emit)
+
+            if self._cancelled:
+                return
+
+            # Step 0: curl (needed by the Docker install script)
+            if self.node_manager.check_curl_installed():
+                self.step_complete.emit(0, True, "curl ready")
+            else:
+                self.progress.emit("Installing curl...")
+                success, msg = self.node_manager.install_curl(self.progress.emit)
                 if not success:
                     self.step_complete.emit(0, False, msg)
                     self.finished.emit(False, msg)
                     return
-                self.step_complete.emit(0, True, "System updated")
-            else:
-                self.step_complete.emit(0, True, "Already up to date")
-            
+                self.step_complete.emit(0, True, "curl installed")
+
             if self._cancelled:
                 return
-            
+
+            # Step 1: Docker
             if self.needs_docker:
                 self.progress.emit("Installing Docker...")
                 success, msg = self.node_manager.install_docker(self.progress.emit)
@@ -130,7 +141,19 @@ class PreRebootWorker(QThread):
                 self.step_complete.emit(1, True, "Docker installed")
             else:
                 self.step_complete.emit(1, True, "Docker ready")
-            
+
+            if self._cancelled:
+                return
+
+            # Step 2: qrencode (only powers the .onion QR convenience feature —
+            # never block the install on it).
+            if self.node_manager.check_qrencode_installed():
+                self.step_complete.emit(2, True, "qrencode ready")
+            else:
+                self.progress.emit("Installing qrencode...")
+                success, msg = self.node_manager.install_qrencode(self.progress.emit)
+                self.step_complete.emit(2, True, "qrencode installed" if success else "qrencode skipped")
+
             self.finished.emit(True, "Ready for reboot")
         except Exception as e:
             self.finished.emit(False, str(e))
@@ -488,7 +511,7 @@ class InstallerWizard(QMainWindow):
         title.setFont(QFont("Segoe UI", 22, QFont.Bold))
         layout.addWidget(title)
         
-        subtitle = QLabel("This may take 10-20 minutes")
+        subtitle = QLabel("This usually takes a few minutes")
         subtitle.setStyleSheet("color: #888;")
         layout.addWidget(subtitle)
         
@@ -508,7 +531,7 @@ class InstallerWizard(QMainWindow):
         
         # Steps
         self.setup_steps = []
-        steps = ["Update system", "Install Docker"]
+        steps = ["Install curl", "Install Docker", "Install qrencode"]
         
         for step in steps:
             row = QHBoxLayout()
@@ -906,7 +929,7 @@ class InstallerWizard(QMainWindow):
         
         needs_docker = not self.node_manager.check_docker_installed()
         
-        self.worker = PreRebootWorker(self.node_manager, True, needs_docker)
+        self.worker = PreRebootWorker(self.node_manager, needs_docker)
         self.worker.progress.connect(lambda m: self.setup_status.setText(m))
         self.worker.step_complete.connect(self._on_setup_step)
         self.worker.finished.connect(self._on_setup_done)
@@ -916,8 +939,9 @@ class InstallerWizard(QMainWindow):
         if idx < len(self.setup_steps):
             self.setup_steps[idx].setText("✓" if ok else "✗")
             self.setup_steps[idx].setStyleSheet(f"color: {'#4ade80' if ok else '#ef4444'};")
-        # Jump target forward when step completes (0-100 scale)
-        self.setup_progress.set_target((idx + 1) * 50)
+        # Jump target forward when step completes (0-100 scale), scaled to step count
+        total = max(1, len(self.setup_steps))
+        self.setup_progress.set_target(int((idx + 1) / total * 100))
     
     def _on_setup_done(self, ok, msg):
         self.setup_progress.stop_animation()

@@ -4,8 +4,19 @@ echo "================================"
 echo "       ZecNode Installer"
 echo "================================"
 
+# Run all apt steps unattended (no debconf / needrestart prompts that would hang).
+export DEBIAN_FRONTEND=noninteractive
+export NEEDRESTART_MODE=a
+
 # Ensure sudo credentials are cached for the entire install
 sudo -v
+
+# Keep the sudo timestamp fresh in the background so long GUI steps (apt update/
+# upgrade, Docker install) never hit a password prompt mid-install. Self-terminates
+# when this script exits.
+( while true; do sudo -n true 2>/dev/null || true; sleep 50; kill -0 "$$" 2>/dev/null || exit 0; done ) &
+SUDO_KEEPALIVE_PID=$!
+trap 'kill "$SUDO_KEEPALIVE_PID" 2>/dev/null || true' EXIT
 
 PROJECT_DIR="$HOME/zecnode"
 GITHUB_RAW="https://raw.githubusercontent.com/mycousiinvinny/zecnode/main"
@@ -67,8 +78,10 @@ install_pyqt5() {
     # Method 1: apt (most reliable on Ubuntu/Debian)
     if command -v apt &> /dev/null; then
         echo "Installing PyQt5 via apt..."
-        sudo apt update -qq
-        sudo apt install -y python3-pyqt5 > /dev/null 2>&1 && return 0
+        # `sudo env VAR=...` sets the vars inside the root process (survives sudo's
+        # env_reset) so apt stays non-interactive.
+        sudo env DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=a apt update -qq
+        sudo env DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=a apt install -y python3-pyqt5 > /dev/null 2>&1 && return 0
     fi
     
     # Method 2: pip with --break-system-packages (Python 3.11+)
@@ -91,11 +104,8 @@ if ! python3 -c "import PyQt5" 2>/dev/null; then
     fi
 fi
 
-# qrencode powers the .onion QR code in the dashboard (optional — non-fatal if it fails)
-if command -v apt &> /dev/null && ! command -v qrencode &> /dev/null; then
-    echo "Installing qrencode (for .onion QR codes)..."
-    sudo apt install -y qrencode > /dev/null 2>&1 || true
-fi
+# Note: curl, Docker, and qrencode are installed by the in-app installer as
+# visible setup steps — no need to install them here.
 
 echo ""
 echo "Launching ZecNode..."

@@ -8,20 +8,6 @@ Run a Zcash node in only 2 commands!
 
 ZecNode is an independent community project and is not affiliated with, endorsed by, or associated with the Electric Coin Company, Zcash Foundation, or any official Zcash organization.
 
-## Install
-
-Open Terminal and run:
-
-*sudo apt install curl -y && curl -sSL https://raw.githubusercontent.com/mycousiinvinny/zecnode/main/install.sh | bash*
-
-Command after reboot:
-
-*curl -sSL https://raw.githubusercontent.com/mycousiinvinny/zecnode/main/install.sh | bash*
-
-Please report any bugs you find.
-
-Enjoy!
-
 ## What is this?
 
 A GUI installer and dashboard for running a Zcash full node. I built it because setting up a node manually is tedious - you have to install Docker, format drives, edit config files, etc. Even more tedious if you don't use Docker. This handles all of that.
@@ -30,12 +16,36 @@ A GUI installer and dashboard for running a Zcash full node. I built it because 
 
 Running a node on your main computer kind of sucks. It eats up resources, needs to stay on 24/7, and uses way more electricity than necessary. A Pi 5 with an SSD runs the full Zcash blockchain for like $5/year in electricity, sits in a corner, and just works. Set it and forget it.
 
+## Install
+
+> **Update your system first.** ZecNode doesn't upgrade your packages for you — that's your machine and your call — so please run a quick system update *before* installing. It avoids dependency hiccups and is the smoothest path:
+>
+> ```bash
+> sudo apt update && sudo apt upgrade -y
+> ```
+>
+> Reboot if it pulls in a new kernel, then continue below.
+
+**1.** Open a terminal and run:
+
+```bash
+sudo apt install curl -y && curl -sSL https://raw.githubusercontent.com/mycousiinvinny/zecnode/main/install.sh | bash
+```
+
+**2.** The installer reboots once after installing Docker. When it comes back, run this to finish:
+
+```bash
+curl -sSL https://raw.githubusercontent.com/mycousiinvinny/zecnode/main/install.sh | bash
+```
+
+Please report any bugs you find. Enjoy!
+
 ## Requirements
 
 - Raspberry Pi 5 (recommended) or any Linux PC
 - External SSD (500GB minimum)
 - Internet connection
-- About 20 minutes for initial setup. Much less if your system is up to date.
+- A few minutes for the ZecNode setup itself. The full chain then syncs in the background, which takes a while (hours to days, depending on your connection) — you can use everything while it syncs.
 
 ## What it does
 
@@ -93,7 +103,9 @@ Then reopen ZecNode — it rebuilds the containers and starts syncing again. A f
 
 If you ever need to uninstall, run:
 
-*curl -sSL https://raw.githubusercontent.com/mycousiinvinny/zecnode/main/uninstall.sh | bash*
+```bash
+curl -sSL https://raw.githubusercontent.com/mycousiinvinny/zecnode/main/uninstall.sh | bash
+```
 
 Your blockchain data at `/mnt/zebra-data` is preserved, so reinstalling is near-instant.
 

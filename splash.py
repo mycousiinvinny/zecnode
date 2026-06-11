@@ -74,6 +74,12 @@ class SplashScreen(QWidget):
         tagline.setStyleSheet(f"color: {TEXT_MUTED}; font-size: 13px;")
         layout.addWidget(tagline)
 
+        # Optional progress line (e.g. "Checking storage…") set during startup.
+        self.status_label = QLabel("")
+        self.status_label.setAlignment(Qt.AlignCenter)
+        self.status_label.setStyleSheet(f"color: {ACCENT}; font-size: 11px;")
+        layout.addWidget(self.status_label)
+
         layout.addStretch()
 
         ver = QLabel(f"v{VERSION}")
@@ -111,6 +117,10 @@ class SplashScreen(QWidget):
         region = region.united(QRegion(0, h - 2 * r, 2 * r, 2 * r, QRegion.Ellipse))
         region = region.united(QRegion(w - 2 * r, h - 2 * r, 2 * r, 2 * r, QRegion.Ellipse))
         self.setMask(region)
+
+    def set_status(self, text):
+        """Update the small progress line under the tagline (thread-safe via signal)."""
+        self.status_label.setText(text or "")
 
     def request_dismiss(self):
         """Called when dashboard is ready. Fades out once minimum time has elapsed."""

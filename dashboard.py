@@ -12,7 +12,7 @@ import urllib.request
 from PyQt5.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel,
     QPushButton, QTextEdit, QSystemTrayIcon,
-    QMenu, QAction, QMessageBox, QDialog, QApplication,
+    QMenu, QAction, QDialog, QApplication,
     QSpacerItem, QSizePolicy, QFrame, QProgressBar,
     QStackedWidget, QLineEdit, QGraphicsOpacityEffect,
     QGraphicsDropShadowEffect, QScrollArea, QGridLayout
@@ -908,6 +908,82 @@ class MessageDialog(QDialog):
         ok_btn.clicked.connect(self.accept)
 
 
+class ErrorDialog(QDialog):
+    """Friendly, dismissable error dialog. Shows a plain-language headline and
+    summary, with the raw technical detail (Docker stderr, etc.) tucked behind a
+    'Show details' toggle so users aren't hit with a wall of stderr by default."""
+
+    def __init__(self, parent, headline, summary, details=None):
+        super().__init__(parent)
+        self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
+        self.setModal(True)
+        self.setStyleSheet(
+            f"QDialog {{ background-color: {C['surface']}; border: 1px solid {C['border']}; }}"
+        )
+        self.setMinimumWidth(380)
+        self.setMaximumWidth(460)
+
+        v = QVBoxLayout(self)
+        v.setContentsMargins(24, 22, 24, 20)
+        v.setSpacing(12)
+
+        title = QLabel(headline)
+        title.setFont(QFont("Segoe UI", 14, QFont.Bold))
+        title.setStyleSheet(f"color: {C['error']}; background: transparent; border: none;")
+        title.setWordWrap(True)
+        v.addWidget(title)
+
+        body = QLabel(summary)
+        body.setWordWrap(True)
+        body.setStyleSheet(f"color: {C['text']}; font-size: 12px; background: transparent; border: none;")
+        v.addWidget(body)
+
+        details = (details or "").strip()
+        if details and details != summary.strip():
+            self._details_box = QTextEdit()
+            self._details_box.setReadOnly(True)
+            self._details_box.setPlainText(details)
+            self._details_box.setFixedHeight(110)
+            self._details_box.setStyleSheet(
+                f"QTextEdit {{ background-color: {C['bg']}; color: {C['text_sec']}; "
+                f"border: 1px solid {C['border']}; border-radius: 6px; "
+                f"font-family: monospace; font-size: 11px; }}"
+            )
+            self._details_box.hide()
+
+            self._details_toggle = QPushButton("Show details ▾")
+            self._details_toggle.setCursor(Qt.PointingHandCursor)
+            self._details_toggle.setStyleSheet(
+                f"QPushButton {{ background: transparent; border: none; color: {C['text_sec']}; "
+                f"font-size: 11px; text-align: left; padding: 0; min-width: 0; }}"
+                f"QPushButton:hover {{ color: {C['text']}; }}"
+            )
+
+            def _toggle():
+                if self._details_box.isVisible():
+                    self._details_box.hide()
+                    self._details_toggle.setText("Show details ▾")
+                else:
+                    self._details_box.show()
+                    self._details_toggle.setText("Hide details ▴")
+                self.adjustSize()
+
+            self._details_toggle.clicked.connect(_toggle)
+            v.addWidget(self._details_toggle)
+            v.addWidget(self._details_box)
+
+        ok_btn = QPushButton("OK")
+        ok_btn.setCursor(Qt.PointingHandCursor)
+        ok_btn.setMinimumHeight(38)
+        ok_btn.setStyleSheet(
+            f"QPushButton {{ background-color: {C['accent']}; border: none; border-radius: 8px; "
+            f"color: #0a0a0e; font-size: 13px; font-weight: 600; padding: 0 22px; }}"
+            f"QPushButton:hover {{ background-color: {C['accent_hover']}; }}"
+        )
+        ok_btn.clicked.connect(self.accept)
+        v.addWidget(ok_btn, 0, Qt.AlignRight)
+
+
 class UpdateDialog(QDialog):
     def __init__(self, parent, message="Updating..."):
         super().__init__(parent)
@@ -1700,6 +1776,14 @@ class DashboardWindow(QMainWindow):
             f"color: {C['text_muted']}; font-size: 12px; background: transparent;"
         )
         header.addWidget(tagline)
+
+        # Freshness / loading line — tells the user whether data is loading, live,
+        # or stale instead of leaving them guessing at a row of dashes.
+        self.net_status_label = QLabel("")
+        self.net_status_label.setStyleSheet(
+            f"color: {C['text_sec']}; font-size: 11px; background: transparent;"
+        )
+        header.addWidget(self.net_status_label)
         layout.addLayout(header)
 
         # ── Top stats row ──────────────────────────────────────
@@ -2723,6 +2807,7 @@ class DashboardWindow(QMainWindow):
         self._run_action("restart")
 
     def _run_action(self, action):
+        self._last_action = action
         if hasattr(self, 'action_thread') and self.action_thread is not None:
             try:
                 if self.action_thread.isRunning():
@@ -2740,8 +2825,37 @@ class DashboardWindow(QMainWindow):
         self.zebra_toggle.setEnabled(True)
 
         if not ok:
-            QMessageBox.warning(self, "Error", msg)
+            action = getattr(self, '_last_action', None)
+            headline, summary, details = self._friendly_action_error(action, msg)
+            ErrorDialog(self, headline, summary, details).exec_()
         self._start_refresh()
+
+    @staticmethod
+    def _friendly_action_error(action, msg):
+        """Turn a node action failure into (headline, summary, details).
+
+        Short, already-readable messages from node_manager (e.g. "SSD not
+        mounted…") are shown as-is; long/raw output (Docker stderr) is replaced
+        with a calm summary and tucked into the details pane."""
+        headlines = {
+            "start":   "Couldn't start the node",
+            "stop":    "Couldn't stop the node",
+            "restart": "Couldn't restart the node",
+        }
+        verbs = {"start": "starting", "stop": "stopping", "restart": "restarting"}
+        headline = headlines.get(action, "Something went wrong")
+        msg = (msg or "").strip()
+
+        # A short, single-line message is almost always the friendly, actionable
+        # one node_manager raises on purpose — surface it directly.
+        if msg and len(msg) <= 160 and "\n" not in msg:
+            return headline, msg, None
+
+        summary = (
+            f"Something went wrong while {verbs.get(action, 'working')}. "
+            "This is usually temporary — make sure Docker is running, then try again."
+        )
+        return headline, summary, (msg or None)
 
     # ── Version & price ───────────────────────────────────
 
@@ -2765,10 +2879,29 @@ class DashboardWindow(QMainWindow):
 
         self._run_in_thread(get_version, on_version_done)
 
+    def _set_network_status(self, text, color=None):
+        """Update the Network tab freshness line."""
+        if getattr(self, 'net_status_label', None) is None:
+            return
+        self.net_status_label.setText(text)
+        self.net_status_label.setStyleSheet(
+            f"color: {color or C['text_sec']}; font-size: 11px; background: transparent;"
+        )
+
     def _refresh_network_data(self):
         """Fetch network info + shielded supply history from zcashinfo.com."""
         if self._closing:
             return
+
+        # On the very first fetch the cards are empty — show a loading placeholder
+        # rather than dashes. On later refreshes keep the last-known values visible
+        # so the page never blinks back to blank while updating.
+        first_load = not getattr(self, '_network_loaded', False)
+        if first_load:
+            for card in (self.net_height_card, self.net_hashrate_card,
+                         self.net_supply_card, self.net_shielded_pct_card):
+                card.set_value("…")
+        self._set_network_status("Updating…", C['text_sec'])
 
         def fetch():
             import urllib.request, json as _json
@@ -2811,6 +2944,22 @@ class DashboardWindow(QMainWindow):
             history = result.get("history") or []
             mining_history = result.get("mining_history") or {}
 
+            # Primary endpoint failed — show a clear stale/failed state instead of
+            # silently swallowing the error and leaving dashes on screen.
+            if not info:
+                if getattr(self, '_network_loaded', False):
+                    self._set_network_status(
+                        "Couldn't refresh — showing last known data", C['warning'])
+                else:
+                    for card in (self.net_height_card, self.net_hashrate_card,
+                                 self.net_supply_card, self.net_shielded_pct_card):
+                        card.set_value("--")
+                    self._set_network_status(
+                        "Couldn't load network data — will retry", C['error'])
+                return
+
+            self._network_loaded = True
+
             if info:
                 height = info.get("best_block") or info.get("chain_tip") or 0
                 self.net_height_card.set_value(f"{height:,}")
@@ -2839,6 +2988,10 @@ class DashboardWindow(QMainWindow):
 
             if history:
                 self.shielded_chart.set_data(history)
+
+            import time as _time
+            self._set_network_status(
+                f"Updated {_time.strftime('%H:%M')}", C['success'])
 
         self._run_in_thread(fetch, on_done)
 
@@ -3417,30 +3570,24 @@ class DashboardWindow(QMainWindow):
 
     def _show_onion_qr(self):
         """Pop up a scannable QR of THIS node's own .onion address (read live
-        from config), so a phone wallet can grab the long string without typing."""
-        import subprocess
+        from config), so a phone wallet can grab the long string without typing.
+
+        The QR is rendered by the system 'qrencode' tool, which can take a few
+        seconds (or hang on a missing binary), so it runs in a worker thread: the
+        dialog opens instantly with a 'Generating…' placeholder and fills in once
+        the image is ready."""
         onion = self.config.get("arti_onion_address", "")
         if not onion:
             return
         data = f"{onion}:443"
 
-        # Render with the system 'qrencode' tool — no bundled third-party code.
-        png = None
-        try:
-            result = subprocess.run(
-                ["qrencode", "-o", "-", "-t", "PNG", "-s", "8", "-m", "2", data],
-                capture_output=True, timeout=10
-            )
-            if result.returncode == 0 and result.stdout:
-                png = result.stdout
-        except (FileNotFoundError, subprocess.TimeoutExpired):
-            png = None
-
         dlg = QDialog(self)
         # Frameless to match the app's other dialogs (no native title-bar buttons);
         # the Close button below is the single way out.
         dlg.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
-        dlg.setModal(True)
+        # Application-modal but shown via show() (not exec_) so we don't block the
+        # event loop while qrencode runs — the worker can still update this dialog.
+        dlg.setWindowModality(Qt.ApplicationModal)
         dlg.setStyleSheet(f"QDialog {{ background-color: {C['surface']}; "
                           f"border: 1px solid {C['accent']}; }}")
         v = QVBoxLayout(dlg)
@@ -3453,36 +3600,29 @@ class DashboardWindow(QMainWindow):
         title.setAlignment(Qt.AlignCenter)
         v.addWidget(title)
 
-        if png:
-            pm = QPixmap()
-            pm.loadFromData(png)
-            qr_label = QLabel()
-            qr_label.setPixmap(pm)
-            qr_label.setAlignment(Qt.AlignCenter)
-            # White card behind the QR so it scans on the dark theme.
-            qr_label.setStyleSheet("background: white; border-radius: 8px; padding: 12px;")
-            v.addWidget(qr_label, 0, Qt.AlignCenter)
+        # Body swaps from placeholder → QR image (or install hint) when ready.
+        body = QLabel("Generating QR…")
+        body.setMinimumSize(180, 180)
+        body.setAlignment(Qt.AlignCenter)
+        body.setWordWrap(True)
+        body.setStyleSheet(f"color: {C['text_sec']}; font-size: 12px; background: transparent;")
+        v.addWidget(body, 0, Qt.AlignCenter)
 
-            addr = QLabel(data)
-            addr.setTextInteractionFlags(Qt.TextSelectableByMouse)
-            addr.setWordWrap(True)
-            addr.setAlignment(Qt.AlignCenter)
-            addr.setStyleSheet(f"color: {C['text_sec']}; font-size: 11px; "
-                               f"font-family: monospace; background: transparent;")
-            v.addWidget(addr)
+        addr = QLabel(data)
+        addr.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        addr.setWordWrap(True)
+        addr.setAlignment(Qt.AlignCenter)
+        addr.setStyleSheet(f"color: {C['text_sec']}; font-size: 11px; "
+                           f"font-family: monospace; background: transparent;")
+        addr.hide()
+        v.addWidget(addr)
 
-            hint = QLabel("Scan, then paste into your wallet's custom-server field.")
-            hint.setWordWrap(True)
-            hint.setAlignment(Qt.AlignCenter)
-            hint.setStyleSheet(f"color: {C['text_muted']}; font-size: 11px; background: transparent;")
-            v.addWidget(hint)
-        else:
-            msg = QLabel("QR generator isn't installed.\n\nInstall it once with:\n"
-                         "sudo apt install qrencode")
-            msg.setWordWrap(True)
-            msg.setAlignment(Qt.AlignCenter)
-            msg.setStyleSheet(f"color: {C['text_sec']}; font-size: 12px; background: transparent;")
-            v.addWidget(msg)
+        hint = QLabel("Scan, then paste into your wallet's custom-server field.")
+        hint.setWordWrap(True)
+        hint.setAlignment(Qt.AlignCenter)
+        hint.setStyleSheet(f"color: {C['text_muted']}; font-size: 11px; background: transparent;")
+        hint.hide()
+        v.addWidget(hint)
 
         close_btn = QPushButton("Close")
         close_btn.setCursor(Qt.PointingHandCursor)
@@ -3495,7 +3635,54 @@ class DashboardWindow(QMainWindow):
         close_btn.clicked.connect(dlg.accept)
         v.addWidget(close_btn, 0, Qt.AlignCenter)
 
-        dlg.exec_()
+        # Keep a reference so the dialog isn't garbage-collected while shown.
+        self._qr_dialog = dlg
+        dlg.finished.connect(lambda *_: setattr(self, '_qr_dialog', None))
+
+        def generate():
+            import subprocess
+            try:
+                result = subprocess.run(
+                    # -m 4: a full 4-module white quiet zone baked into the image so
+                    # the code scans without relying on extra CSS padding.
+                    ["qrencode", "-o", "-", "-t", "PNG", "-s", "7", "-m", "4", data],
+                    capture_output=True, timeout=10
+                )
+                if result.returncode == 0 and result.stdout:
+                    return result.stdout
+            except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
+                pass
+            return None
+
+        def on_qr_done(png):
+            if self._closing or self._qr_dialog is not dlg:
+                return
+            if png:
+                pm = QPixmap()
+                pm.loadFromData(png)
+                # Pin the label to the pixmap's exact (square) size and clear the
+                # placeholder's word-wrap / min-size / scaling so nothing can stretch
+                # the QR — a distorted, non-square code won't scan.
+                body.setText("")
+                body.setWordWrap(False)
+                body.setScaledContents(False)
+                body.setMinimumSize(0, 0)
+                body.setFixedSize(pm.size())
+                body.setPixmap(pm)
+                # White card behind the QR so it scans on the dark theme. No padding:
+                # the quiet zone is baked into the image (qrencode -m 4) and padding
+                # would clip the fixed-size pixmap.
+                body.setStyleSheet("background: white; border-radius: 8px;")
+                addr.show()
+                hint.show()
+            else:
+                body.setText("QR generator isn't installed.\n\nInstall it once with:\n"
+                             "sudo apt install qrencode")
+                body.setStyleSheet(f"color: {C['text_sec']}; font-size: 12px; background: transparent;")
+            dlg.adjustSize()
+
+        dlg.show()
+        self._run_in_thread(generate, on_qr_done)
 
     def _toggle_arti_from_toggle(self, checked):
         self._toggle_arti(checked)
