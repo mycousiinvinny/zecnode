@@ -118,6 +118,12 @@ def get_status():
                 config.set("arti_onion_address", addr)
         threading.Thread(target=_fetch_onion, daemon=True).start()
 
+    # Quick Sync — observe any running import; when the worker reports done,
+    # finalize in the background (remove worker, start Zebra).
+    quicksync = node_manager.get_quicksync_status()
+    if quicksync and quicksync.get("phase") == "done":
+        threading.Thread(target=_finish_quicksync_bg, daemon=True).start()
+
     return jsonify({
         "running": status.running,
         "sync_percent": sync_pct,
@@ -137,6 +143,8 @@ def get_status():
             "enabled": arti_enabled,
             "onion": onion
         },
+        "quicksync": quicksync,
+        "quicksync_offer": quicksync is None and sync_pct < 95.0,
         "zecnode_version": VERSION
     })
 
@@ -326,6 +334,74 @@ def toggle_arti():
             "running": True,
             "onion": config.get("arti_onion_address", "") or None
         })
+
+
+# ==================== QUICK SYNC ====================
+
+_qs_start_lock = threading.Lock()
+_qs_finish_lock = threading.Lock()
+
+
+def _start_quicksync_bg(manifest):
+    """Start Quick Sync in the background (stopping the chain takes seconds).
+    Guarded so a double-tap can't race two workers."""
+    if not _qs_start_lock.acquire(blocking=False):
+        return
+    try:
+        node_manager.start_quicksync(manifest)
+    finally:
+        _qs_start_lock.release()
+
+
+def _finish_quicksync_bg():
+    """Finalize a completed import: remove the worker and start Zebra.
+    Guarded so overlapping status polls can't race."""
+    if not _qs_finish_lock.acquire(blocking=False):
+        return
+    try:
+        node_manager.finish_quicksync()
+    finally:
+        _qs_finish_lock.release()
+
+
+@app.route('/api/quicksync/check')
+def quicksync_check():
+    """Pre-flight: latest snapshot info + disk and network checks."""
+    manifest = node_manager.fetch_quicksync_manifest()
+    if not manifest:
+        return jsonify({"success": False,
+                        "message": "Couldn't reach the snapshot server. Check your internet connection and try again."})
+    if int(manifest.get("db_major", -1)) != node_manager.QUICKSYNC_DB_MAJOR:
+        return jsonify({"success": False,
+                        "message": "The latest snapshot uses a newer format than this ZecNode version supports. Update ZecNode first."})
+    free = node_manager.quicksync_free_bytes()
+    need = node_manager.quicksync_required_bytes(manifest)
+    if free < need:
+        return jsonify({"success": False,
+                        "message": f"Not enough free space on the SSD: Quick Sync needs about {need // 2**30} GiB free, you have {free // 2**30} GiB."})
+    return jsonify({
+        "success": True,
+        "size_gib": round(manifest["size_bytes"] / 2**30),
+        "height": manifest["height"],
+        "wifi": node_manager.is_on_wifi()
+    })
+
+
+@app.route('/api/quicksync/start', methods=['POST'])
+def quicksync_start():
+    """Kick off the snapshot import — returns immediately, runs detached."""
+    manifest = node_manager.fetch_quicksync_manifest()
+    if not manifest:
+        return jsonify({"success": False, "message": "Couldn't reach the snapshot server."})
+    threading.Thread(target=_start_quicksync_bg, args=(manifest,), daemon=True).start()
+    return jsonify({"success": True, "message": "Quick Sync starting..."})
+
+
+@app.route('/api/quicksync/cancel', methods=['POST'])
+def quicksync_cancel():
+    """Stop the import and delete the staging area."""
+    success, message = node_manager.cancel_quicksync()
+    return jsonify({"success": success, "message": message})
 
 
 # ==================== SYSTEM INFO ====================

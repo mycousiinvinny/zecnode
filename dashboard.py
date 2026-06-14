@@ -553,7 +553,7 @@ class NodeActionThread(QThread):
 
 
 class RefreshThread(QThread):
-    finished = pyqtSignal(object, bool, str, str, bool, bool)
+    finished = pyqtSignal(object, bool, str, str, bool, bool, object)
 
     _cached_internet = True
     _last_internet_check = 0
@@ -600,8 +600,12 @@ class RefreshThread(QThread):
         arti_running = self.node_manager.is_arti_running()
         if not self._running:
             return
+        # Cheap when idle: one isdir() check unless an import is actually running.
+        quicksync = self.node_manager.get_quicksync_status()
+        if not self._running:
+            return
 
-        self.finished.emit(status, has_internet, ssd, sd, lwd_running, arti_running)
+        self.finished.emit(status, has_internet, ssd, sd, lwd_running, arti_running, quicksync)
 
 
 class UpdateThread(QThread):
@@ -778,15 +782,15 @@ class UpdateThread(QThread):
 # ============================================================
 
 class ConfirmDialog(QDialog):
-    def __init__(self, parent, title, message):
+    def __init__(self, parent, title, message, yes_text="Update", height=240):
         super().__init__(parent)
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
         self.setModal(True)
-        self.setFixedSize(420, 240)
+        self.setFixedSize(420, height)
         self.setAttribute(Qt.WA_TranslucentBackground)
 
         container = QFrame(self)
-        container.setGeometry(0, 0, 420, 240)
+        container.setGeometry(0, 0, 420, height)
         container.setStyleSheet(f"""
             QFrame {{
                 background-color: {C['surface']};
@@ -812,13 +816,13 @@ class ConfirmDialog(QDialog):
         title_label.setAlignment(Qt.AlignCenter)
 
         msg_label = QLabel(message, container)
-        msg_label.setGeometry(36, 64, 348, 70)
+        msg_label.setGeometry(36, 64, 348, height - 170)
         msg_label.setStyleSheet(f"color: {C['text']}; font-size: 12px; border: none; background: transparent;")
         msg_label.setAlignment(Qt.AlignCenter)
         msg_label.setWordWrap(True)
 
         btn_widget = QWidget(container)
-        btn_widget.setGeometry(0, 155, 420, 60)
+        btn_widget.setGeometry(0, height - 85, 420, 60)
         btn_widget.setStyleSheet("background: transparent; border: none;")
 
         btn_layout = QHBoxLayout(btn_widget)
@@ -838,7 +842,7 @@ class ConfirmDialog(QDialog):
         self.no_btn.clicked.connect(self.reject)
         btn_layout.addWidget(self.no_btn)
 
-        self.yes_btn = QPushButton("Update")
+        self.yes_btn = QPushButton(yes_text)
         self.yes_btn.setMinimumHeight(42)
         self.yes_btn.setMinimumWidth(130)
         self.yes_btn.setStyleSheet(f"""
@@ -1096,6 +1100,9 @@ class DashboardWindow(QMainWindow):
         self._arti_action_in_progress = False
         self._arti_auto_action_in_progress = False
         self._arti_onion_fetch_in_progress = False
+        self._qs_busy = False           # check/confirm/start flow in flight
+        self._qs_finishing = False      # finalize (worker cleanup + node start) in flight
+        self._qs_last_phase = None      # last observed phase, for cancel wording
         self._closing = False
         self.refresh_thread = None
         cached_ver = self.config.get("cached_zebra_version", None)
@@ -1447,6 +1454,39 @@ class DashboardWindow(QMainWindow):
             f"color: {C['text_muted']}; font-size: 11px; background: transparent; border: none;"
         )
         h_layout.addWidget(self.sync_eta_label)
+
+        # Quick Sync — offered while the node is far from synced; while an
+        # import runs, the hero labels above show its progress instead.
+        self.quicksync_btn = QPushButton("⚡ Quick Sync")
+        self.quicksync_btn.setCursor(Qt.PointingHandCursor)
+        self.quicksync_btn.setVisible(False)
+        self.quicksync_btn.setStyleSheet(f"""
+            QPushButton {{
+                background: transparent; color: {C['accent']};
+                border: 1px solid {C['accent']}; border-radius: 16px;
+                font-size: 12px; font-weight: 600;
+                padding: 7px 18px; min-width: 0;
+            }}
+            QPushButton:hover {{ background: rgba(244, 183, 40, 0.12); }}
+            QPushButton:disabled {{ color: {C['text_muted']}; border-color: {C['border']}; }}
+        """)
+        self.quicksync_btn.clicked.connect(self._quicksync_clicked)
+        h_layout.addSpacing(4)
+        h_layout.addWidget(self.quicksync_btn, 0, Qt.AlignCenter)
+
+        self.quicksync_cancel_btn = QPushButton("Cancel Quick Sync")
+        self.quicksync_cancel_btn.setCursor(Qt.PointingHandCursor)
+        self.quicksync_cancel_btn.setVisible(False)
+        self.quicksync_cancel_btn.setStyleSheet(f"""
+            QPushButton {{
+                background: transparent; color: {C['text_muted']};
+                border: none; font-size: 11px;
+                padding: 2px 8px; min-width: 0;
+            }}
+            QPushButton:hover {{ color: {C['error']}; }}
+        """)
+        self.quicksync_cancel_btn.clicked.connect(self._cancel_quicksync_clicked)
+        h_layout.addWidget(self.quicksync_cancel_btn, 0, Qt.AlignCenter)
 
         layout.addWidget(hero)
 
@@ -2518,7 +2558,7 @@ class DashboardWindow(QMainWindow):
         except ValueError:
             pass
 
-    def _on_refresh_done(self, status, has_internet, ssd, sd, lwd_running, arti_running):
+    def _on_refresh_done(self, status, has_internet, ssd, sd, lwd_running, arti_running, quicksync=None):
         if self._closing:
             return
         first_refresh = not self._first_refresh_emitted
@@ -2645,6 +2685,10 @@ class DashboardWindow(QMainWindow):
 
         # Arti / Tor
         self._update_arti_ui(status, arti_running, lwd_running)
+
+        # Quick Sync — must run after the sync-hero paint above so an active
+        # import can take over the hero labels.
+        self._update_quicksync_ui(status, quicksync, sync_pct)
 
         # Persist snapshot so next startup looks instant
         self._save_status_snapshot(status, has_internet, ssd, sd, lwd_running, arti_running)
@@ -2793,6 +2837,148 @@ class DashboardWindow(QMainWindow):
             self.arti_status_dot.set_state(StatusDot.STATE_STOPPED)
             self.arti_status.setText("")
             self._show_onion("")
+
+    # ── Quick Sync (snapshot import) ──────────────────────
+
+    def _update_quicksync_ui(self, status, quicksync, sync_pct):
+        if quicksync is None:
+            self._qs_last_phase = None
+            # Offer the shortcut while the node is far from synced. Deliberately
+            # NOT gated on _qs_busy: a background refresh during the confirm
+            # dialog must not hide the button (it would vanish behind the dialog
+            # and only reappear on the next refresh after Cancel). _qs_finishing
+            # covers the gap between cleanup and Zebra reporting ~99.9%.
+            self.quicksync_btn.setVisible(
+                sync_pct < 95.0 and not self._qs_finishing
+            )
+            self.quicksync_cancel_btn.setVisible(False)
+            return
+
+        phase = quicksync.get("phase", "")
+        self._qs_last_phase = phase
+        self.quicksync_btn.setVisible(False)
+        self.quicksync_cancel_btn.setVisible(phase != "done")
+        # The import wipes/replaces Zebra's database — keep the toggle away.
+        self.zebra_toggle.setEnabled(False)
+        self.restart_btn.setVisible(False)
+
+        pct = quicksync.get("percent", 0.0)
+        self.sync_progress.setValue(int(pct))
+        # One decimal: early download progress is fractions of a percent, so
+        # integer rounding made it jump 0% -> 1% and hid real movement.
+        self.sync_percent_label.setText(f"{pct:.1f}%")
+        self.sync_percent_label.setStyleSheet(
+            f"color: {C['text']}; background: transparent; border: none;"
+        )
+        if self.sync_percent_label.graphicsEffect() is not None:
+            self.sync_percent_label.setGraphicsEffect(None)
+        color = C['error'] if quicksync.get("error") else C['accent']
+        self.sync_height_label.setText(f"⚡ {quicksync.get('headline', 'Quick Sync')}")
+        self.sync_height_label.setStyleSheet(
+            f"color: {color}; font-size: 14px; font-weight: 600; background: transparent; border: none;"
+        )
+        self.sync_eta_label.setText(quicksync.get("detail", ""))
+
+        if phase == "done" and not self._qs_finishing:
+            self._qs_finishing = True
+
+            def _finished(result):
+                self._qs_finishing = False
+
+            self._run_in_thread(self.node_manager.finish_quicksync, _finished)
+    def _quicksync_clicked(self):
+        if self._qs_busy:
+            return
+        self._qs_busy = True
+        default_text = "⚡ Quick Sync"
+        self.quicksync_btn.setEnabled(False)
+        self.quicksync_btn.setText("Checking…")
+
+        def _check():
+            manifest = self.node_manager.fetch_quicksync_manifest()
+            free = self.node_manager.quicksync_free_bytes()
+            wifi = self.node_manager.is_on_wifi()
+            return manifest, free, wifi
+
+        def _checked(result):
+            self.quicksync_btn.setEnabled(True)
+            self.quicksync_btn.setText(default_text)
+            if self._closing:
+                return
+            manifest, free, wifi = result
+
+            if manifest is None:
+                self._qs_busy = False
+                ErrorDialog(self, "Couldn't reach the snapshot server",
+                            "Check your internet connection and try again in a minute.").exec_()
+                return
+            if int(manifest.get("db_major", -1)) != self.node_manager.QUICKSYNC_DB_MAJOR:
+                self._qs_busy = False
+                ErrorDialog(self, "Snapshot format too new",
+                            "The latest snapshot uses a newer database format than this version "
+                            "of ZecNode supports. Update ZecNode in Settings, then try again.").exec_()
+                return
+            need = self.node_manager.quicksync_required_bytes(manifest)
+            if free < need:
+                self._qs_busy = False
+                ErrorDialog(self, "Not enough free space",
+                            f"Quick Sync needs about {need // 2**30} GiB free on your SSD, "
+                            f"but only {free // 2**30} GiB is available.").exec_()
+                return
+
+            msg = (f"Your node will import a {manifest['size_bytes'] // 2**30} GiB snapshot of the "
+                   f"Zcash blockchain (block {manifest['height']:,}) published by ValarGroup, a "
+                   "Zcash community provider, instead of verifying every block itself.\n\n"
+                   "Typically 4–6 hours on wired internet. It keeps running if you close this "
+                   "app, and your node starts automatically when it finishes. Any sync progress "
+                   "already on this node is replaced by the snapshot.")
+            if wifi:
+                msg += ("\n\n⚠ Your Pi appears to be on WiFi — wired Ethernet is strongly "
+                        "recommended. WiFi can take 12+ hours.")
+
+            dialog = ConfirmDialog(self, "Start Quick Sync?", msg,
+                                   yes_text="Start", height=360)
+            if not dialog.exec_():
+                self._qs_busy = False
+                return
+
+            self.quicksync_btn.setEnabled(False)
+            self.quicksync_btn.setText("Starting Quick Sync…")
+
+            def _started(start_result):
+                self._qs_busy = False
+                self.quicksync_btn.setEnabled(True)
+                self.quicksync_btn.setText(default_text)
+                if self._closing:
+                    return
+                ok, err = start_result
+                if not ok:
+                    ErrorDialog(self, "Quick Sync couldn't start", err).exec_()
+                else:
+                    self._start_refresh()
+
+            self._run_in_thread(lambda: self.node_manager.start_quicksync(manifest), _started)
+
+        self._run_in_thread(_check, _checked)
+
+    def _cancel_quicksync_clicked(self):
+        if self._qs_last_phase in ("download", "preparing", None):
+            msg = ("Stops the download and deletes the partial snapshot.\n\n"
+                   "Your node's existing data is untouched.")
+        else:
+            msg = ("Stops the import. Your old chain data was already replaced, "
+                   "so the node will need to sync from scratch.\n\nCancel anyway?")
+        dialog = ConfirmDialog(self, "Cancel Quick Sync?", msg,
+                               yes_text="Yes, Cancel", height=260)
+        dialog.no_btn.setText("Keep Going")
+        if not dialog.exec_():
+            return
+
+        def _cancelled(result):
+            self._start_refresh()
+
+        self.quicksync_cancel_btn.setVisible(False)
+        self._run_in_thread(self.node_manager.cancel_quicksync, _cancelled)
 
     # ── Node actions ──────────────────────────────────────
 

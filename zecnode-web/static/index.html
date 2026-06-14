@@ -551,6 +551,24 @@
                     <span class="copy-hint"></span>
                 </div>
             </div>
+
+            <div class="lightwalletd-section" id="qsSection" style="display:none;">
+                <div class="toggle-row">
+                    <span class="stat-label">&#9889; Quick Sync</span>
+                    <button class="btn btn-primary" id="qsStartBtn" style="padding:6px 16px; font-size:12px; width:auto;">Start</button>
+                </div>
+                <div id="qsHint" style="font-size:11px; color:#888; margin-top:4px;">
+                    Import a community snapshot — hours instead of days.
+                </div>
+                <div id="qsProgressWrap" style="display:none;">
+                    <div style="background:#26262e; border-radius:4px; height:8px; overflow:hidden; margin:8px 0 6px;">
+                        <div id="qsBar" style="background:linear-gradient(90deg,#f4b728,#ffd24a); height:100%; width:0%; border-radius:4px; transition:width 1s;"></div>
+                    </div>
+                    <div id="qsPhase" style="font-size:12px; color:#ddd;"></div>
+                    <div id="qsDetail" style="font-size:11px; color:#888; margin-top:2px;"></div>
+                    <div id="qsCancel" style="font-size:11px; color:#e05555; margin-top:6px; cursor:pointer; -webkit-tap-highlight-color:transparent;">Cancel Quick Sync</div>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -780,9 +798,85 @@
                     }
                 }
 
+                // Quick Sync
+                updateQuickSyncUI(data);
+
             } catch (error) {
                 console.error('Failed to fetch status:', error);
             }
+        }
+
+        let qsPhase = null;
+
+        function updateQuickSyncUI(data) {
+            const section = document.getElementById('qsSection');
+            const startBtn = document.getElementById('qsStartBtn');
+            const hint = document.getElementById('qsHint');
+            const wrap = document.getElementById('qsProgressWrap');
+            const qs = data.quicksync;
+            qsPhase = qs ? qs.phase : null;
+
+            if (qs) {
+                section.style.display = 'block';
+                startBtn.style.display = 'none';
+                hint.style.display = 'none';
+                wrap.style.display = 'block';
+                document.getElementById('qsBar').style.width = `${qs.percent}%`;
+                document.getElementById('qsPhase').textContent = `${qs.headline} — ${qs.percent.toFixed(1)}%`;
+                document.getElementById('qsDetail').textContent = qs.detail || '';
+                document.getElementById('qsCancel').style.display = qs.phase === 'done' ? 'none' : 'block';
+            } else if (data.quicksync_offer) {
+                section.style.display = 'block';
+                startBtn.style.display = 'inline-block';
+                hint.style.display = 'block';
+                wrap.style.display = 'none';
+            } else {
+                section.style.display = 'none';
+            }
+        }
+
+        async function startQuickSync() {
+            const btn = document.getElementById('qsStartBtn');
+            btn.disabled = true;
+            btn.textContent = 'Checking…';
+            try {
+                const r = await fetch(`${API_BASE}/api/quicksync/check`);
+                const info = await r.json();
+                if (!info.success) {
+                    showToast(info.message);
+                    return;
+                }
+                let msg = `Quick Sync downloads a ${info.size_gib} GiB snapshot of the Zcash blockchain (block ${info.height.toLocaleString()}) published by ValarGroup, a Zcash community provider, instead of your node verifying every block itself.\n\nTypically 4–6 hours on wired internet. It keeps running if you close this page, and your node starts automatically when it finishes. Any sync progress already on this node is replaced by the snapshot.`;
+                if (info.wifi) {
+                    msg += '\n\n⚠ Your Pi appears to be on WiFi — wired Ethernet is strongly recommended (WiFi can take 12+ hours).';
+                }
+                msg += '\n\nStart Quick Sync?';
+                if (!window.confirm(msg)) return;
+                const r2 = await fetch(`${API_BASE}/api/quicksync/start`, { method: 'POST' });
+                const d2 = await r2.json();
+                showToast(d2.message);
+                setTimeout(fetchStatus, 2000);
+            } catch (e) {
+                showToast('Quick Sync check failed');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Start';
+            }
+        }
+
+        async function cancelQuickSync() {
+            const msg = qsPhase === 'download' || qsPhase === 'preparing'
+                ? 'Cancel Quick Sync? The partial download will be deleted. Your node is otherwise untouched.'
+                : 'Cancel Quick Sync? Your old chain data was already replaced, so the node will need to sync from scratch.';
+            if (!window.confirm(msg)) return;
+            try {
+                const r = await fetch(`${API_BASE}/api/quicksync/cancel`, { method: 'POST' });
+                const d = await r.json();
+                showToast(d.message);
+            } catch (e) {
+                showToast('Failed to cancel Quick Sync');
+            }
+            fetchStatus();
         }
 
         // Control functions
@@ -1000,6 +1094,16 @@
         document.getElementById('artiToggle').addEventListener('click', function(e) {
             e.stopPropagation();
             toggleArti();
+        });
+
+        // Quick Sync
+        document.getElementById('qsStartBtn').addEventListener('click', function(e) {
+            e.stopPropagation();
+            startQuickSync();
+        });
+        document.getElementById('qsCancel').addEventListener('click', function(e) {
+            e.stopPropagation();
+            cancelQuickSync();
         });
 
         // Clipboard copy that also works over plain http on mobile.

@@ -63,6 +63,19 @@ class NodeManager:
     ZEBRA_CACHE_DIR = "zebra-cache"
     ZEBRA_STATE_DIR = "zebra-state"
     
+    # Quick Sync (snapshot import) — collapses days of P2P sync into hours by
+    # importing a daily ValarGroup Zebra state snapshot.
+    QUICKSYNC_CONTAINER_NAME = "zecnode-quicksync"
+    QUICKSYNC_IMAGE_NAME = "alpine:3"
+    QUICKSYNC_LATEST_URL = "https://zebra-snapshots.nyc3.cdn.digitaloceanspaces.com/mainnet/latest.json"
+    # Zebra's on-disk database format the snapshot must match. If ValarGroup
+    # moves ahead of the zfnd/zebra image we ship, refuse rather than corrupt.
+    QUICKSYNC_DB_MAJOR = 27
+    # Extracted RocksDB state is a bit larger than the zstd tarball.
+    QUICKSYNC_EXTRACT_RATIO = 1.12
+    # Tarball + extracted state coexist briefly, plus headroom.
+    QUICKSYNC_SPACE_FACTOR = 2.25
+
     # Zcash mainnet approximate current height
     ESTIMATED_TARGET_HEIGHT = 3_200_000
     
@@ -1007,6 +1020,10 @@ gsettings set org.gnome.desktop.session idle-delay 0 2>/dev/null || true
         # This prevents writing data to the SD card if SSD is disconnected
         if not os.path.ismount(self.MOUNT_PATH):
             return False, f"SSD not mounted at {self.MOUNT_PATH}. Please reconnect the SSD and try again."
+
+        # Never start Zebra mid-Quick-Sync — the import wipes and replaces its database.
+        if self.is_quicksync_active():
+            return False, "Quick Sync is in progress. Wait for it to finish (your node starts automatically) or cancel it first."
         
         # Verify the data directories exist on the SSD
         cache_path = f"{self.MOUNT_PATH}/{self.ZEBRA_CACHE_DIR}"
@@ -1577,6 +1594,350 @@ gsettings set org.gnome.desktop.session idle-delay 0 2>/dev/null || true
                 capture_output=True
             )
             return True, "Arti stopped"
+        except Exception as e:
+            return False, f"Error: {str(e)}"
+
+    # ==================== QUICK SYNC (SNAPSHOT IMPORT) ====================
+    #
+    # Instead of verifying the whole chain from scratch (days on a Pi), import
+    # a daily Zebra state snapshot published by ValarGroup (~4-6 hours wired).
+    # The work runs in a detached helper container with --restart unless-stopped,
+    # so it survives reboots, power loss and the dashboard being closed; the
+    # dashboards only OBSERVE it via a status file + file sizes on disk.
+    # Trust note: a snapshot is not consensus-validated — the user is trusting
+    # ValarGroup's copy of the chain. The sha256 check only guards transit
+    # corruption. The UI says so before starting.
+
+    def _quicksync_dir(self) -> str:
+        return f"{self.MOUNT_PATH}/quicksync"
+
+    def is_quicksync_active(self) -> bool:
+        """True while an import is running or waiting to be finalized.
+        Once the 'done' marker exists the data is in place and Zebra may start."""
+        qs_dir = self._quicksync_dir()
+        return os.path.isdir(qs_dir) and not os.path.exists(f"{qs_dir}/done")
+
+    def fetch_quicksync_manifest(self) -> Optional[dict]:
+        """Fetch latest.json from the snapshot CDN: current URL(s), sha256,
+        exact size, height and db format version. None on any failure."""
+        try:
+            import json
+            import urllib.request
+            req = urllib.request.Request(
+                self.QUICKSYNC_LATEST_URL, headers={"User-Agent": "ZecNode"}
+            )
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                manifest = json.loads(resp.read().decode())
+            required = ("url", "filename", "sha256", "size_bytes", "height", "db_major")
+            if not all(k in manifest for k in required):
+                return None
+            return manifest
+        except Exception:
+            return None
+
+    def quicksync_free_bytes(self) -> int:
+        """Free space on the SSD."""
+        try:
+            return shutil.disk_usage(self.MOUNT_PATH).free
+        except Exception:
+            return 0
+
+    def quicksync_required_bytes(self, manifest: dict) -> int:
+        return int(int(manifest["size_bytes"]) * self.QUICKSYNC_SPACE_FACTOR)
+
+    def is_on_wifi(self) -> bool:
+        """True if the default route goes out over a wireless interface.
+        Wired vs WiFi is the single biggest Quick Sync speed factor."""
+        try:
+            result = subprocess.run(
+                ["ip", "route", "get", "8.8.8.8"],
+                capture_output=True, text=True, timeout=5
+            )
+            match = re.search(r'\bdev\s+(\S+)', result.stdout)
+            return bool(match and match.group(1).startswith("wl"))
+        except Exception:
+            return False
+
+    def _write_quicksync_script(self, qs_dir: str, manifest: dict):
+        """Generate the worker script the helper container runs. Every step
+        resumes or re-runs safely, so the restart policy self-heals failures."""
+        urls = manifest.get("urls") or [manifest["url"]]
+        script = f"""#!/bin/sh
+# ZecNode Quick Sync worker — generated, do not edit.
+# Runs in an alpine container with /mnt/zebra-data mounted at /data.
+QS=/data/quicksync
+FILE="{manifest['filename']}"
+SHA256="{manifest['sha256']}"
+SIZE={int(manifest['size_bytes'])}
+
+status() {{
+  printf '{{"phase":"%s","note":"%s"}}' "$1" "$2" > "$QS/.st.tmp" && mv "$QS/.st.tmp" "$QS/status.json"
+}}
+
+# Finished on a previous run (container restarted after done) — just idle.
+[ -f "$QS/done" ] && {{ status done ""; exec tail -f /dev/null; }}
+
+status preparing ""
+apk add --no-cache aria2 zstd tar ca-certificates >/dev/null 2>&1 \\
+  || {{ status error "package install failed (no internet?)"; sleep 5; exit 1; }}
+
+if [ ! -f "$QS/verified" ]; then
+  status download ""
+  # -c resumes a partial file; mirrors are alternate sources for the same file.
+  # DigitalOcean Spaces drops connections, so retry forever with a short wait.
+  aria2c -c --max-tries=0 --retry-wait=8 -x16 -s16 \\
+    --allow-overwrite=true --file-allocation=none --summary-interval=0 \\
+    --checksum=sha-256=$SHA256 -d "$QS" -o "$FILE" \\
+    {' '.join(urls)}
+  if [ $? -ne 0 ]; then
+    got=$(stat -c %s "$QS/$FILE" 2>/dev/null || echo 0)
+    if [ "$got" -ge "$SIZE" ]; then
+      # Complete but failed the checksum — start the download over clean.
+      rm -f "$QS/$FILE" "$QS/$FILE.aria2"
+      status error "checksum mismatch - restarting download"
+    else
+      status error "download interrupted"
+    fi
+    sleep 5
+    exit 1
+  fi
+  touch "$QS/verified"
+fi
+
+status extract ""
+mkdir -p /data/zebra-cache
+# Old/partial chain state must not mix with snapshot data — wipe, then unpack.
+# (Re-runs after an interrupted extract land here again, which is correct.)
+find /data/zebra-cache -mindepth 1 -maxdepth 1 -exec rm -rf {{}} +
+zstd -dc "$QS/$FILE" | tar -x -C /data/zebra-cache \\
+  || {{ status error "unpack failed"; sleep 5; exit 1; }}
+
+status finalize ""
+# Snapshot files arrive as UID 10001 (the zebra container user); the dir
+# itself must match so Zebra can write its peers file etc.
+chown 10001:10001 /data/zebra-cache
+rm -f "$QS/$FILE" "$QS/verified"
+touch "$QS/done"
+status done ""
+exec tail -f /dev/null
+"""
+        with open(f"{qs_dir}/snap.sh", "w") as f:
+            f.write(script)
+
+    def start_quicksync(self, manifest: dict) -> Tuple[bool, str]:
+        """Stop the node chain and launch the detached snapshot-import worker."""
+        try:
+            import json
+            if self.is_quicksync_running():
+                return True, "Quick Sync already running"
+            if int(manifest.get("db_major", -1)) != self.QUICKSYNC_DB_MAJOR:
+                return False, ("The latest snapshot uses a newer database format than this "
+                               "version of ZecNode supports. Update ZecNode and try again.")
+            if not os.path.ismount(self.MOUNT_PATH):
+                return False, f"SSD not mounted at {self.MOUNT_PATH}."
+            free = self.quicksync_free_bytes()
+            need = self.quicksync_required_bytes(manifest)
+            if free < need:
+                return False, (f"Not enough free space on the SSD: Quick Sync needs about "
+                               f"{need // 2**30} GiB free, but only {free // 2**30} GiB is available.")
+
+            # The import replaces Zebra's database — take the whole chain down.
+            if self.is_arti_running():
+                self.stop_arti()
+            if self.is_lightwalletd_running():
+                self.stop_lightwalletd()
+            if self.get_status().running:
+                self.stop_node()
+
+            qs_dir = self._quicksync_dir()
+            # /mnt/zebra-data is owned by the user, so create + clean the staging
+            # dir WITHOUT sudo — a GUI launch can't supply a sudo password, and
+            # every sudo here would silently fail (manifest.json then can't be
+            # written). The worker container writes its markers as root, but they
+            # live inside this user-owned dir, so the user can still unlink them.
+            os.makedirs(qs_dir, exist_ok=True)
+            for _m in ("status.json", "done", "verified"):
+                try:
+                    os.remove(f"{qs_dir}/{_m}")
+                except OSError:
+                    pass
+            # Drop stale tarballs left from a different snapshot.
+            for _f in os.listdir(qs_dir):
+                if ".tar.zst" in _f and not _f.startswith(manifest["filename"]):
+                    try:
+                        os.remove(os.path.join(qs_dir, _f))
+                    except OSError:
+                        pass
+
+            with open(f"{qs_dir}/manifest.json", "w") as f:
+                json.dump(manifest, f, indent=2)
+            self._write_quicksync_script(qs_dir, manifest)
+
+            subprocess.run(["docker", "rm", "-f", self.QUICKSYNC_CONTAINER_NAME],
+                           capture_output=True)
+            result = subprocess.run([
+                "docker", "run", "-d",
+                "--name", self.QUICKSYNC_CONTAINER_NAME,
+                "-v", f"{self.MOUNT_PATH}:/data",
+                "--restart", "unless-stopped",
+                self.QUICKSYNC_IMAGE_NAME,
+                "sh", "/data/quicksync/snap.sh"
+            ], capture_output=True, text=True, timeout=300)
+
+            if result.returncode != 0:
+                shutil.rmtree(qs_dir, ignore_errors=True)
+                return False, f"Failed to start Quick Sync: {result.stderr}"
+            return True, "Quick Sync started"
+        except subprocess.TimeoutExpired:
+            return False, "Timeout starting Quick Sync"
+        except Exception as e:
+            return False, f"Error: {str(e)}"
+
+    def is_quicksync_running(self) -> bool:
+        try:
+            result = subprocess.run(
+                ["docker", "ps", "-q", "-f", f"name={self.QUICKSYNC_CONTAINER_NAME}"],
+                capture_output=True, text=True, timeout=5
+            )
+            return bool(result.stdout.strip())
+        except Exception:
+            return False
+
+    # In-memory samples for download speed and a 10s extract-progress cache —
+    # `du` over ~300 GiB of .sst files is too heavy to run on every poll.
+    _qs_rate_sample = None
+    _qs_du_cache = (0.0, 0)
+
+    def _quicksync_extracted_bytes(self, cache_path: str) -> int:
+        now = time.monotonic()
+        last_time, last_val = NodeManager._qs_du_cache
+        if now - last_time < 10:
+            return last_val
+        try:
+            result = subprocess.run(["du", "-sb", cache_path],
+                                    capture_output=True, text=True, timeout=60)
+            val = int(result.stdout.split()[0])
+        except Exception:
+            val = last_val
+        NodeManager._qs_du_cache = (now, val)
+        return val
+
+    def get_quicksync_status(self) -> Optional[dict]:
+        """Observe the import from disk + docker state. None when no import
+        exists. The returned headline/detail strings are shared by both UIs.
+        Overall percent: download 0-45, verify ~46, extract 50-98, done 100."""
+        qs_dir = self._quicksync_dir()
+        if not os.path.isdir(qs_dir):
+            return None
+        import json
+
+        def _result(phase, percent, headline, detail, error=False):
+            return {"phase": phase, "percent": round(min(max(percent, 0.0), 100.0), 1),
+                    "headline": headline, "detail": detail, "error": error}
+
+        try:
+            with open(f"{qs_dir}/manifest.json") as f:
+                manifest = json.load(f)
+        except Exception:
+            return _result("error", 0, "Quick Sync problem",
+                           "Setup files are missing — cancel and start again.", error=True)
+
+        phase, note = "preparing", ""
+        try:
+            with open(f"{qs_dir}/status.json") as f:
+                st = json.load(f)
+            phase = st.get("phase", "preparing")
+            note = st.get("note", "")
+        except Exception:
+            pass
+
+        if phase == "done":
+            return _result("done", 100, "Quick Sync complete", "Starting your node…")
+
+        # The worker has --restart unless-stopped, so "not running" normally
+        # just means it's mid-restart; only a missing container is a problem.
+        inspect = subprocess.run(
+            ["docker", "inspect", "-f", "{{.State.Status}}", self.QUICKSYNC_CONTAINER_NAME],
+            capture_output=True, text=True, timeout=5
+        )
+        if inspect.returncode != 0:
+            return _result("error", 0, "Quick Sync stopped unexpectedly",
+                           "Its worker container is gone — cancel and start again.", error=True)
+
+        size = int(manifest["size_bytes"])
+        tar_path = f"{qs_dir}/{manifest['filename']}"
+
+        if phase in ("download", "error", "preparing"):
+            try:
+                # aria2c's parallel connections seek-write at spread-out offsets,
+                # so the partial file is SPARSE: its logical size (os.path.getsize
+                # / st_size) jumps to a near-full value immediately while almost
+                # nothing is on disk. st_blocks*512 is the ACTUAL bytes written —
+                # that's what reflects real download progress, rate, and ETA.
+                done_bytes = os.stat(tar_path).st_blocks * 512
+            except Exception:
+                done_bytes = 0
+            if phase == "preparing" and done_bytes == 0:
+                # 0% (not 1%) so the bar doesn't dip back when the real download
+                # starts at ~0 — progress only ever moves forward. The headline
+                # makes clear it's the pre-download setup step.
+                return _result("preparing", 0, "Quick Sync — getting ready",
+                               "Setting up the download…")
+            if done_bytes >= size:
+                return _result("verify", 46, "Verifying snapshot",
+                               "Checking the download for corruption — roughly 20 minutes…")
+            percent = done_bytes / size * 45
+            detail = f"{done_bytes / 2**30:.1f} of {size / 2**30:.0f} GiB"
+            now = time.monotonic()
+            if NodeManager._qs_rate_sample:
+                t0, b0 = NodeManager._qs_rate_sample
+                if now > t0 and done_bytes > b0:
+                    rate = (done_bytes - b0) / (now - t0)
+                    if rate > 100_000:
+                        eta_h = (size - done_bytes) / rate / 3600
+                        eta = f"about {eta_h:.1f} h left" if eta_h >= 1 else f"about {eta_h * 60:.0f} min left"
+                        detail += f" — {rate / 2**20:.0f} MB/s, {eta}"
+            NodeManager._qs_rate_sample = (now, done_bytes)
+            if phase == "error":
+                return _result("download", percent, "Quick Sync — retrying",
+                               f"Hiccup ({note}) — it recovers automatically. {detail}")
+            return _result("download", percent, "Downloading snapshot",
+                           f"{detail} · Safe to close this window — it keeps running.")
+
+        if phase == "extract":
+            extracted = self._quicksync_extracted_bytes(f"{self.MOUNT_PATH}/{self.ZEBRA_CACHE_DIR}")
+            est_total = size * self.QUICKSYNC_EXTRACT_RATIO
+            percent = 50 + min(extracted / est_total, 1.0) * 48
+            return _result("extract", min(percent, 98.0), "Unpacking blockchain",
+                           "Slowest step — typically 2–3 hours on a Pi. Safe to close this window.")
+
+        if phase == "finalize":
+            return _result("finalize", 99, "Finishing up", "Cleaning up…")
+
+        return _result(phase, 0, "Quick Sync", note or "Working…")
+
+    def cancel_quicksync(self) -> Tuple[bool, str]:
+        """Stop the worker and delete the staging area (partial tarball, markers).
+        If extraction had already begun, the old chain state is gone — the caller
+        should warn the user before getting here."""
+        try:
+            subprocess.run(["docker", "rm", "-f", self.QUICKSYNC_CONTAINER_NAME],
+                           capture_output=True, timeout=30)
+            shutil.rmtree(self._quicksync_dir(), ignore_errors=True)
+            NodeManager._qs_rate_sample = None
+            return True, "Quick Sync cancelled"
+        except Exception as e:
+            return False, f"Error: {str(e)}"
+
+    def finish_quicksync(self) -> Tuple[bool, str]:
+        """Called by a dashboard when the worker reports done: remove the worker,
+        clear the staging area, and hand off to a normal node start."""
+        try:
+            subprocess.run(["docker", "rm", "-f", self.QUICKSYNC_CONTAINER_NAME],
+                           capture_output=True, timeout=30)
+            shutil.rmtree(self._quicksync_dir(), ignore_errors=True)
+            NodeManager._qs_rate_sample = None
+            return self.start_node()
         except Exception as e:
             return False, f"Error: {str(e)}"
 
