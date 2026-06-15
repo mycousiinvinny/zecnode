@@ -371,14 +371,17 @@ Hidden=false
 NoDisplay=true
 X-GNOME-Autostart-enabled=true
 """
+                # Write directly (NO sudo): these live in the user's own home,
+                # and a GUI install can't supply a sudo password — the old sudo
+                # writes silently failed, which is why the menu entry / app icon
+                # never got created on no-passwordless-sudo systems (Ubuntu).
                 desktop_file = f"{autostart_dir}/zecnode-nosleep.desktop"
-                subprocess.run(
-                    ["sudo", "bash", "-c", f"cat > {desktop_file} << 'EOF'\n{desktop_entry}EOF"],
-                    capture_output=True,
-                    timeout=10
-                )
-                subprocess.run(["sudo", "chown", f"{actual_user}:{actual_user}", desktop_file], capture_output=True, timeout=10)
-                subprocess.run(["sudo", "chown", "-R", f"{actual_user}:{actual_user}", autostart_dir], capture_output=True, timeout=10)
+                try:
+                    os.makedirs(autostart_dir, exist_ok=True)
+                    with open(desktop_file, "w") as _f:
+                        _f.write(desktop_entry)
+                except OSError:
+                    pass
                 
                 # Create application menu entry for ZecNode
                 app_entry = f"""[Desktop Entry]
@@ -389,15 +392,22 @@ Exec=bash -c "cd {home_dir}/zecnode && python3 main.py"
 Icon={home_dir}/zecnode/zecnode-icon.png
 Terminal=false
 Categories=Utility;Network;
+StartupWMClass=ZecNode
 """
+                # StartupWMClass MUST match the running window's WM_CLASS — Qt
+                # sets the X11 res_class to the applicationName ("ZecNode") — or
+                # GNOME can't tie the window to this entry and shows its generic
+                # gear instead of the logo. Written directly, no sudo (see above).
                 app_file = f"{applications_dir}/zecnode.desktop"
-                subprocess.run(
-                    ["sudo", "bash", "-c", f"cat > {app_file} << 'EOF'\n{app_entry}EOF"],
-                    capture_output=True,
-                    timeout=10
-                )
-                subprocess.run(["sudo", "chown", f"{actual_user}:{actual_user}", app_file], capture_output=True, timeout=10)
-                subprocess.run(["sudo", "chmod", "+x", app_file], capture_output=True, timeout=10)
+                try:
+                    os.makedirs(applications_dir, exist_ok=True)
+                    with open(app_file, "w") as _f:
+                        _f.write(app_entry)
+                    os.chmod(app_file, 0o755)
+                    subprocess.run(["update-desktop-database", applications_dir],
+                                   capture_output=True, timeout=10)
+                except OSError:
+                    pass
                 
                 # Also try running gsettings now via su (may work if display is available)
                 gsettings_script = """
