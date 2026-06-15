@@ -9,7 +9,7 @@ import os
 import subprocess
 from PyQt5.QtWidgets import QApplication
 from PyQt5.QtCore import Qt, QObject, QThread, QTimer, pyqtSignal, qInstallMessageHandler
-from PyQt5.QtGui import QFont
+from PyQt5.QtGui import QFont, QIcon
 
 from config import Config
 from installer import InstallerWizard
@@ -417,6 +417,11 @@ def main():
     app.setApplicationName("ZecNode")
     app.setOrganizationName("ZecNode")
     app.setDesktopFileName("zecnode")
+    # Set the window/taskbar icon explicitly. Without this the running window
+    # has no _NET_WM_ICON, so GNOME shows its generic gear instead of the logo.
+    _icon_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "zecnode-icon.png")
+    if os.path.exists(_icon_path):
+        app.setWindowIcon(QIcon(_icon_path))
     app.setStyle("Fusion")
     app.setStyleSheet(STYLESHEET)
 
