@@ -79,7 +79,7 @@ Your normal (clearnet) wallet access keeps working unchanged — Tor is just an 
 
 ## Screenshot
 
-<img width="988" height="903" alt="dashboard" src="https://github.com/user-attachments/assets/ff7866ec-7e5f-44c4-a61e-5fb08029ca95" />
+<img width="900" alt="ZecNode dashboard — Quick Sync importing a snapshot" src="dashboard.png" />
 
 ## Why run a node?
 
