@@ -972,6 +972,25 @@ gsettings set org.gnome.desktop.session idle-delay 0 2>/dev/null || true
         except Exception as e:
             return False, f"Failed to create directories: {str(e)}"
     
+    def _zebra_run_argv(self):
+        """The `docker run` argv for the Zebra node container — the single
+        source of truth shared by start_node() and the Quick Sync worker's
+        auto-start (so the two can never drift apart)."""
+        cache_path = f"{self.MOUNT_PATH}/{self.ZEBRA_CACHE_DIR}"
+        state_path = f"{self.MOUNT_PATH}/{self.ZEBRA_STATE_DIR}"
+        return [
+            "docker", "run", "-d",
+            "--name", self.CONTAINER_NAME,
+            "--network", "zecnode",
+            "-v", f"{cache_path}:/home/zebra/.cache/zebra",
+            "-v", f"{state_path}:/home/zebra/.local/state/zebra",
+            "-p", "8233:8233",
+            "-e", "ZEBRA_RPC__LISTEN_ADDR=0.0.0.0:8232",
+            "-e", "ZEBRA_RPC__ENABLE_COOKIE_AUTH=false",
+            "--restart", "unless-stopped",
+            self.IMAGE_NAME,
+        ]
+
     def start_node(self, progress_callback=None) -> Tuple[bool, str]:
         """
         Start the Zebra node.
@@ -1018,18 +1037,9 @@ gsettings set org.gnome.desktop.session idle-delay 0 2>/dev/null || true
                 capture_output=True
             )
 
-            result = subprocess.run([
-                "docker", "run", "-d",
-                "--name", self.CONTAINER_NAME,
-                "--network", "zecnode",
-                "-v", f"{cache_path}:/home/zebra/.cache/zebra",
-                "-v", f"{state_path}:/home/zebra/.local/state/zebra",
-                "-p", "8233:8233",
-                "-e", "ZEBRA_RPC__LISTEN_ADDR=0.0.0.0:8232",
-                "-e", "ZEBRA_RPC__ENABLE_COOKIE_AUTH=false",
-                "--restart", "unless-stopped",
-                self.IMAGE_NAME
-            ], capture_output=True, text=True, timeout=120)
+            result = subprocess.run(
+                self._zebra_run_argv(), capture_output=True, text=True, timeout=120
+            )
 
             if result.returncode != 0:
                 return False, f"Failed to start node: {result.stderr}"
@@ -1619,7 +1629,11 @@ gsettings set org.gnome.desktop.session idle-delay 0 2>/dev/null || true
     def _write_quicksync_script(self, qs_dir: str, manifest: dict):
         """Generate the worker script the helper container runs. Every step
         resumes or re-runs safely, so the restart policy self-heals failures."""
+        import shlex
         urls = manifest.get("urls") or [manifest["url"]]
+        # Exact command the worker uses to bring the node up when it finishes,
+        # built from the same source as start_node so they never diverge.
+        zebra_cmd = " ".join(shlex.quote(a) for a in self._zebra_run_argv())
         script = f"""#!/bin/sh
 # ZecNode Quick Sync worker — generated, do not edit.
 # Runs in an alpine container with /mnt/zebra-data mounted at /data.
@@ -1677,6 +1691,20 @@ chown 10001:10001 /data/zebra-cache
 rm -f "$QS/$FILE" "$QS/verified"
 touch "$QS/done"
 status done ""
+
+# Start the node ourselves so it comes up even if the dashboard is closed.
+# We reach the host Docker daemon through the mounted socket. If the dashboard
+# already started it this no-ops; if Docker/socket isn't reachable we just idle
+# and the dashboard starts the node the next time it's opened.
+apk add --no-cache docker-cli >/dev/null 2>&1
+if [ -z "$(docker ps -q -f name=zebra 2>/dev/null)" ]; then
+  docker network create zecnode >/dev/null 2>&1
+  docker rm -f zebra >/dev/null 2>&1
+  {zebra_cmd} >/dev/null 2>&1
+fi
+if [ -n "$(docker ps -q -f name=zebra 2>/dev/null)" ]; then
+  exec docker rm -f zecnode-quicksync
+fi
 exec tail -f /dev/null
 """
         with open(f"{qs_dir}/snap.sh", "w") as f:
@@ -1737,6 +1765,10 @@ exec tail -f /dev/null
                 "docker", "run", "-d",
                 "--name", self.QUICKSYNC_CONTAINER_NAME,
                 "-v", f"{self.MOUNT_PATH}:/data",
+                # The Docker socket lets the worker start the node itself when the
+                # import finishes — so the node comes up even if the dashboard is
+                # closed, instead of waiting for the app to notice "done".
+                "-v", "/var/run/docker.sock:/var/run/docker.sock",
                 "--restart", "unless-stopped",
                 self.QUICKSYNC_IMAGE_NAME,
                 "sh", "/data/quicksync/snap.sh"
