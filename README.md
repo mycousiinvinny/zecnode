@@ -49,9 +49,10 @@ Please report any bugs you find. Enjoy!
 
 ## What it does
 
-- Installs Docker and Zebra (Zcash node software)
+- Installs Docker, Curl, qrencode (for QR code) and Zebra (Zcash node software)
 - Formats and mounts your SSD
 - Shows sync progress, peer count, disk usage
+- Quick sync option. Download snapshot of zcash blockchain instead of syncing for days
 - Runs in the system tray
 - **Web dashboard** for headless setups — manage and monitor your node from any browser on your network
 - Notifies you when a new version is available, and updates in one click
