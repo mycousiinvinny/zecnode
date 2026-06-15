@@ -101,13 +101,24 @@ Then reopen ZecNode — it rebuilds the containers and starts syncing again. A f
 
 ## Uninstall
 
-If you ever need to uninstall, run:
+Download and run the uninstaller:
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/mycousiinvinny/zecnode/main/uninstall.sh | bash
+curl -sSL https://raw.githubusercontent.com/mycousiinvinny/zecnode/main/uninstall.sh -o uninstall.sh
+bash uninstall.sh
 ```
 
-Your blockchain data at `/mnt/zebra-data` is preserved, so reinstalling is near-instant.
+This removes the app, config, and containers. Your blockchain data at `/mnt/zebra-data` is **preserved**, so reinstalling is near-instant.
+
+### Full wipe — start completely from scratch
+
+To also erase **all blockchain data on the SSD** for a truly fresh start, add `--wipe`:
+
+```bash
+bash uninstall.sh --wipe
+```
+
+It stops everything, removes the app and config, and erases the SSD — asking you to type `ERASE` to confirm first. You'll have to sync the node from scratch afterward, so only use this when you genuinely want a clean slate.
 
 ## Roadmap
 
