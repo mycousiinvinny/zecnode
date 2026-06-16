@@ -1886,7 +1886,7 @@ exec tail -f /dev/null
                 manifest = json.load(f)
         except Exception:
             return _result("error", 0, "Quick Sync problem",
-                           "Setup files are missing — cancel and start again.", error=True)
+                           "Setup files are missing. Cancel and start again.", error=True)
 
         phase, note = "preparing", ""
         try:
@@ -1908,7 +1908,7 @@ exec tail -f /dev/null
         )
         if inspect.returncode != 0:
             return _result("error", 0, "Quick Sync stopped unexpectedly",
-                           "Its worker container is gone — cancel and start again.", error=True)
+                           "Its worker container is gone. Cancel and start again.", error=True)
 
         size = int(manifest["size_bytes"])
         tar_path = f"{qs_dir}/{manifest['filename']}"
@@ -1927,11 +1927,11 @@ exec tail -f /dev/null
                 # 0% (not 1%) so the bar doesn't dip back when the real download
                 # starts at ~0 — progress only ever moves forward. The headline
                 # makes clear it's the pre-download setup step.
-                return _result("preparing", 0, "Quick Sync — getting ready",
+                return _result("preparing", 0, "Getting ready",
                                "Setting up the download…")
             if done_bytes >= size:
                 return _result("verify", 46, "Verifying snapshot",
-                               "Checking the download for corruption — roughly 20 minutes…")
+                               "Checking the download for corruption, roughly 20 minutes…")
             percent = done_bytes / size * 45
             detail = f"{done_bytes / 2**30:.1f} of {size / 2**30:.0f} GiB"
             now = time.monotonic()
@@ -1942,20 +1942,20 @@ exec tail -f /dev/null
                     if rate > 100_000:
                         eta_h = (size - done_bytes) / rate / 3600
                         eta = f"about {eta_h:.1f} h left" if eta_h >= 1 else f"about {eta_h * 60:.0f} min left"
-                        detail += f" — {rate / 2**20:.0f} MB/s, {eta}"
+                        detail += f" · {rate / 2**20:.0f} MB/s, {eta}"
             NodeManager._qs_rate_sample = (now, done_bytes)
             if phase == "error":
-                return _result("download", percent, "Quick Sync — retrying",
-                               f"Hiccup ({note}) — it recovers automatically. {detail}")
+                return _result("download", percent, "Retrying download",
+                               f"Hiccup ({note}). It recovers automatically. {detail}")
             return _result("download", percent, "Downloading snapshot",
-                           f"{detail} · Safe to close this window — it keeps running.")
+                           f"{detail} · Safe to close dashboard. Node will start when complete.")
 
         if phase == "extract":
             extracted = self._quicksync_extracted_bytes(f"{self.MOUNT_PATH}/{self.ZEBRA_CACHE_DIR}")
             est_total = size * self.QUICKSYNC_EXTRACT_RATIO
             percent = 50 + min(extracted / est_total, 1.0) * 48
             return _result("extract", min(percent, 98.0), "Unpacking blockchain",
-                           "Slowest step — typically 2–3 hours on a Pi. Safe to close this window.")
+                           "Slowest step, typically 2 to 3 hours on a Pi. Safe to close dashboard. Node will start when complete.")
 
         if phase == "finalize":
             return _result("finalize", 99, "Finishing up", "Cleaning up…")
