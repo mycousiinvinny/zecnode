@@ -123,7 +123,7 @@ It stops everything, removes the app and config, and erases the SSD — asking y
 
 ## Roadmap
 
-- Mac version coming eventually
-- Windows version coming eventually
+- Mac version coming soon
+- Windows version coming soon
 
 
