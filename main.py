@@ -400,6 +400,46 @@ class StartupWorker(QThread):
         return "installer"
 
 
+def _ensure_desktop_entry():
+    """Create/refresh the GNOME .desktop entry so the taskbar shows the logo
+    instead of a generic gear. GNOME derives the app icon from this entry (not
+    from setWindowIcon). The installer writes it, but an update or uninstall can
+    leave it missing — so we ensure it on every launch. Written directly with no
+    sudo (it lives in the user's own home), keyed on StartupWMClass=ZecNode,
+    which must match Qt's X11 res_class (= the applicationName)."""
+    try:
+        here = os.path.dirname(os.path.abspath(__file__))
+        icon = os.path.join(here, "zecnode-icon.png")
+        if not os.path.exists(icon):
+            return
+        app_dir = os.path.expanduser("~/.local/share/applications")
+        os.makedirs(app_dir, exist_ok=True)
+        entry = (
+            "[Desktop Entry]\n"
+            "Type=Application\n"
+            "Name=ZecNode\n"
+            "Comment=Zcash Node Dashboard\n"
+            f'Exec=bash -c "cd {here} && python3 main.py"\n'
+            f"Icon={icon}\n"
+            "Terminal=false\n"
+            "Categories=Utility;Network;\n"
+            "StartupWMClass=ZecNode\n"
+        )
+        path = os.path.join(app_dir, "zecnode.desktop")
+        try:
+            current = open(path, encoding="utf-8").read()
+        except OSError:
+            current = None
+        if current != entry:
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(entry)
+            os.chmod(path, 0o755)
+            subprocess.run(["update-desktop-database", app_dir],
+                           capture_output=True, timeout=10)
+    except Exception:
+        pass
+
+
 def main():
     # Silence the harmless, noisy "QPainter::end: Painter not active" warnings
     # that animated custom widgets emit at 60fps when a frame can't paint. They
@@ -422,6 +462,10 @@ def main():
     _icon_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "zecnode-icon.png")
     if os.path.exists(_icon_path):
         app.setWindowIcon(QIcon(_icon_path))
+    # Self-heal the GNOME desktop entry on every launch, so the taskbar shows
+    # the logo instead of a gear. The installer creates it, but an update or
+    # uninstall can leave it missing — this makes it impossible to lose.
+    _ensure_desktop_entry()
     app.setStyle("Fusion")
     app.setStyleSheet(STYLESHEET)
 
