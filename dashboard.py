@@ -3636,8 +3636,7 @@ class DashboardWindow(QMainWindow):
             self,
             "Update Zebra",
             "Download and install the latest Zebra version?\n\n"
-            "Zebra will automatically stop, update, and restart.\n\n"
-            "Warning: Major updates may require a full resync of the blockchain."
+            "Zebra will automatically stop, update, and restart."
         )
         if dialog.exec_() != QDialog.Accepted:
             return
