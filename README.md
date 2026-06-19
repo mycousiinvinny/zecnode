@@ -113,7 +113,7 @@ This removes the app, config, and containers. Your blockchain data at `/mnt/zebr
 
 ### Full wipe — start completely from scratch
 
-To also erase **all blockchain data on the SSD** for a truly fresh start, add `--wipe`:
+To also erase **all blockchain data on the SSD** for a truly fresh start, add to the end of command above `--wipe`:
 
 ```bash
 bash uninstall.sh --wipe
