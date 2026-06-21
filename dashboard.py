@@ -1977,6 +1977,12 @@ class DashboardWindow(QMainWindow):
             ("Turnstiles",
              "One-way doors between shielded pools. They make sure no more ZEC ever leaves a pool than entered it.",
              "Pool value balance checks"),
+            ("Ironwood",
+             "The 2026 upgrade that patches a serious Orchard bug which could have let attackers forge ZEC. It opens a fresh shielded pool on the fixed circuit and moves funds across with a turnstile.",
+             "Orchard circuit patch — new pool"),
+            ("Formal Verification",
+             "Instead of just testing the code and hoping you tried enough cases, mathematicians prove it can't misbehave for any possible input. Ironwood uses it to guarantee the new pool can't be tricked into forging coins.",
+             "Machine-checked proofs"),
             ("Address Types",
              "t1 is public. zs is shielded. u1 is a Unified Address that can hold all types in one.",
              "Transparent / Sapling / Unified"),
@@ -2083,13 +2089,6 @@ class DashboardWindow(QMainWindow):
         uc_layout = QVBoxLayout(updates_card)
         uc_layout.setContentsMargins(18, 14, 18, 14)
         uc_layout.setSpacing(10)
-
-        uc_title = QLabel("Updates")
-        uc_title.setFont(QFont("Segoe UI", 12, QFont.Bold))
-        uc_title.setStyleSheet(
-            f"color: {C['text']}; background: transparent; border: none;"
-        )
-        uc_layout.addWidget(uc_title)
 
         # Primary (gold) update button style
         primary_btn_css = f"""
