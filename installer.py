@@ -22,49 +22,69 @@ class SmoothProgressBar(QWidget):
     
     def __init__(self, parent=None):
         super().__init__(parent)
-        self._value = 0.0  # Float value 0-100
-        self._target = 0.0
+        self._value = 0.0          # displayed value 0-100 (only ever moves forward)
+        self._target = 0.0         # easing goal (milestone, plus bounded creep)
+        self._milestone = 0.0      # last confirmed milestone — the monotonic floor
+        self._creep_ceiling = 0.0  # creep may drift up to here, never past it
         self.setFixedHeight(8)
-        
+
         # Animation timer
         self._timer = QTimer()
         self._timer.timeout.connect(self._animate)
-    
+
     def start_animation(self):
         self._timer.start(16)  # ~60 FPS
-    
+
     def stop_animation(self):
         self._timer.stop()
-    
+
     def set_target(self, target: float):
-        """Set target value (0-100)"""
-        self._target = min(100.0, max(0.0, target))
-    
+        """Advance to a confirmed milestone (0-100).
+
+        Monotonic by design: a milestone never pulls the bar backward, and the
+        idle creep is capped just short of the *next* milestone so that when the
+        next one lands the bar glides forward instead of jumping back. That's
+        what keeps curl -> Docker -> qrencode one smooth motion to 100%.
+        """
+        target = min(100.0, max(0.0, target))
+        if target <= self._milestone:
+            return  # ignore non-advancing milestones (never move backward)
+        step = target - self._milestone  # size of the band we just finished
+        self._milestone = target
+        self._target = max(self._target, target)
+        # Let the creep fill most of the way to the next milestone (~0.9 of a
+        # typical step) but never actually reach it — no overshoot, no backup.
+        self._creep_ceiling = min(target + step * 0.9, 99.0)
+
     def set_value(self, value: float):
-        """Set value directly (0-100)"""
-        self._value = min(100.0, max(0.0, value))
+        """Set value directly (0-100), resyncing state (used for reset/finish)."""
+        value = min(100.0, max(0.0, value))
+        self._value = value
+        self._target = value
+        self._milestone = value
+        self._creep_ceiling = value
         self.update()
-    
+
     def value(self):
         return self._value
-    
+
     def _animate(self):
-        """Smooth easing animation"""
-        if abs(self._value - self._target) < 0.1:
-            # Close enough, snap to target
-            if self._value != self._target:
-                self._value = self._target
-                self.update()
-        else:
-            # Ease towards target (lerp with 0.08 factor for smoothness)
-            self._value += (self._target - self._value) * 0.08
+        """Smooth easing — value only ever moves forward, never backward."""
+        moved = False
+        # Ease toward the current goal (forward only; we never lerp downward).
+        if self._value < self._target:
+            diff = self._target - self._value
+            self._value = self._target if diff < 0.1 else self._value + diff * 0.08
+            moved = True
+
+        # Gentle creep while waiting for the next milestone, bounded so we can
+        # never overshoot it (the overshoot was the cause of the backwards jumps).
+        if self._value >= self._target and self._value < self._creep_ceiling:
+            self._target = min(self._creep_ceiling, self._value + 0.05)
+            moved = True
+
+        if moved:
             self.update()
-        
-        # Slow creep when idle (not at 100%)
-        if self._value >= self._target and self._target < 95:
-            max_creep = min(self._target + 8, 95)
-            if self._value < max_creep:
-                self._target = self._value + 0.05
     
     def paintEvent(self, event):
         # Use begin()/return so we never call end() on an inactive painter

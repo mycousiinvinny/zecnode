@@ -54,6 +54,7 @@ SIDEBAR_BTN = f"""
         padding: 11px 22px;
         border: none;
         border-left: 3px solid transparent;
+        outline: none;
         font-size: 13px;
         font-weight: 500;
         border-radius: 0px;
@@ -72,6 +73,7 @@ SIDEBAR_BTN_ACTIVE = f"""
         padding: 11px 22px;
         border: none;
         border-left: 3px solid {C['accent']};
+        outline: none;
         font-size: 13px;
         font-weight: 600;
         border-radius: 0px;
@@ -1316,6 +1318,9 @@ class DashboardWindow(QMainWindow):
         for i, label in enumerate(nav_items):
             btn = QPushButton(label)
             btn.setCursor(Qt.PointingHandCursor)
+            # Click-only nav: don't accept keyboard focus, otherwise the platform
+            # style draws a blue focus ring around the selected item.
+            btn.setFocusPolicy(Qt.NoFocus)
             btn.setStyleSheet(SIDEBAR_BTN_ACTIVE if i == 0 else SIDEBAR_BTN)
             btn.setFixedHeight(40)
             btn.clicked.connect(lambda checked, idx=i: self._switch_page(idx))
